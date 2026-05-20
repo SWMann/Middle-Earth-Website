@@ -1,0 +1,49 @@
+.gradle
+**/build/
+!src/**/build/
+
+# Ignore Gradle GUI config
+gradle-app.setting
+
+# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
+!gradle-wrapper.jar
+
+# Cache of project
+.gradletasknamecache
+
+# Eclipse Gradle plugin generated files
+# Eclipse Core
+.project
+# JDT-specific (Eclipse Java Development Tools)
+.classpath
+
+run/
+build/
+.idea
+src/main/generated/
+bin/main/*
+
+# --- Web (pnpm workspace, Next.js) ---
+web/**/node_modules/
+web/**/.next/
+web/**/dist/
+web/**/.turbo/
+web/**/coverage/
+
+# Env files — never commit. .env.example IS tracked.
+web/**/.env
+web/**/.env.local
+web/**/.env.*.local
+web/**/.env.development
+web/**/.env.production
+
+# Drizzle Kit metadata that's per-machine (generated SQL migrations get committed)
+web/**/.drizzle/
+
+# --- General ---
+.DS_Store
+*.log
+*.pid
+.tmp/
+.cache/
+

@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/schaefermann/Downloads/middle-earth-main/.claude)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(corepack enable *)",
+      "Bash(corepack prepare *)",
+      "Bash(pnpm --version)",
+      "Bash(pnpm install *)",
+      "Read(//Users/schaefermann/.nvm/versions/node/v24.15.0/lib/node_modules/corepack/dist/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(ls -la /Users/schaefermann/Downloads/middle-earth-main/web/apps/website/node_modules/next/dist/bin/next /Users/schaefermann/.nvm/versions/node/v24.15.0/bin/node)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm lint *)",
+      "Bash(openssl rand *)",
+      "Bash(docker --version)",
+      "Bash(brew list *)",
+      "Bash(pnpm exec *)",
+      "Bash(pnpm add *)",
+      "Bash(yes \"\")",
+      "Bash(node --experimental-strip-types -e ' *)"
+    ]
+  }
+}

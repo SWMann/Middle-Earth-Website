@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --color-parchment: oklch(95% 0.03 80);
+  --color-ink: oklch(20% 0.02 80);
+  --font-serif: ui-serif, Georgia, "Iowan Old Style", "Apple Garamond", serif;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-serif);
+  background-color: white;
+  color: rgb(20, 20, 20);
+}
+
+.dark body {
+  background-color: rgb(15, 15, 18);
+  color: rgb(230, 230, 230);
+}

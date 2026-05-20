@@ -1,0 +1,21 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "website",
+      "runtimeExecutable": "/Users/schaefermann/.nvm/versions/node/v24.15.0/bin/node",
+      "runtimeArgs": [
+        "/Users/schaefermann/Downloads/middle-earth-main/web/apps/website/node_modules/next/dist/bin/next",
+        "dev",
+        "/Users/schaefermann/Downloads/middle-earth-main/web/apps/website"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "mc-server",
+      "runtimeExecutable": "/Users/schaefermann/Downloads/middle-earth-main/gradlew",
+      "runtimeArgs": ["runServer"],
+      "port": 25565
+    }
+  ]
+}
