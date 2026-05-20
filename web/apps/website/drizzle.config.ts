@@ -5,13 +5,13 @@ import type { Config } from "drizzle-kit";
 loadEnv({ path: ".env.local" });
 
 export default {
-  schema: "./lib/db/schema.ts",
+  schema: "./lib/db/schema/index.ts",
   out: "./lib/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL ?? "",
   },
-  schemaFilter: ["web"],
+  schemaFilter: ["web", "game", "audit"],
   verbose: true,
   strict: true,
 } satisfies Config;

@@ -40,6 +40,10 @@ web/**/.env.production
 # Drizzle Kit metadata that's per-machine (generated SQL migrations get committed)
 web/**/.drizzle/
 
+# TypeScript incremental build cache
+web/**/tsconfig.tsbuildinfo
+web/**/*.tsbuildinfo
+
 # --- General ---
 .DS_Store
 *.log

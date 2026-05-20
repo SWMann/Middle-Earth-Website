@@ -11,8 +11,8 @@
     "test": "echo 'no tests yet'",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --env-file=.env.local scripts/db-bootstrap.mjs",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "node --experimental-strip-types scripts/seed.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.2",

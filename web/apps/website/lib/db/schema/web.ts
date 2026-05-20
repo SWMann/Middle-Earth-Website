@@ -1,16 +1,16 @@
 /**
- * The `web.*` schema, owned by the website.
+ * The `web.*` schema — OWNED by the website.
  *
  * The mod has read-only access to these tables (it joins on web.mc_links to
  * resolve a connecting Minecraft UUID to a Discord account). The website
- * never writes to game.* tables — that's the mod's job over its HTTP API.
+ * never writes to game.* tables — that goes through the mod's HTTP API.
  *
  * Mod-spec reference: §2.3, §3.1.
  *
  * Note on Discord IDs: the mod spec defines `discord_id` as BIGINT.
- * Drizzle's pg `bigint` columns only model JS number/bigint — both of which
+ * Drizzle's pg `bigint` columns model JS number/bigint — both of which
  * either lose precision (snowflakes exceed 2^53) or serialize awkwardly
- * across the JSON boundary. We store them as TEXT here, which is what most
+ * across the JSON boundary. We store them as TEXT, which is what most
  * Discord-using apps do in practice. If the size matters later, migrate
  * to BIGINT with a bigint-mode column and a serialisation shim.
  */
