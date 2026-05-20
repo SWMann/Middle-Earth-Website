@@ -48,8 +48,19 @@ export default async function FactionDetailPage({
     getSubfactions(f.id),
     getRegionsClaimedBy(f.id),
     getSettlementsByFaction(f.id),
-    getRecentEvents({ visibility: ["public"], factionId: f.id, limit: 10 }),
+    getRecentEvents({ visibility: ["public"], factionId: f.id, touching: true, limit: 10 }),
   ]);
+
+  // Subfaction holdings — fetched per-sub so we can show them grouped on the
+  // parent's page (the player expectation is "Gondor's stuff includes Dol
+  // Amroth's stuff" even though they're separate factions in the model).
+  const subHoldings = await Promise.all(
+    subs.map(async (sub) => ({
+      faction: sub,
+      settlements: await getSettlementsByFaction(sub.id),
+      regions: await getRegionsClaimedBy(sub.id),
+    })),
+  );
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-16 space-y-12">
@@ -138,18 +149,35 @@ export default async function FactionDetailPage({
         </div>
       </section>
 
-      {/* ----- Subfactions ----- */}
-      {subs.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold mb-4">Subfactions</h2>
-          <ul className="space-y-2 text-sm">
-            {subs.map((s) => (
-              <li key={s.id} className="flex items-baseline gap-2">
-                <FactionTag factionId={s.id} />
-                <span className="opacity-60">— {s.loreSummary}</span>
-              </li>
-            ))}
-          </ul>
+      {/* ----- Subfactions and their holdings ----- */}
+      {subHoldings.length > 0 && (
+        <section className="space-y-6">
+          <h2 className="text-lg font-semibold">Subfaction holdings</h2>
+          {subHoldings.map(({ faction: sub, settlements: ss, regions: rs }) => (
+            <div
+              key={sub.id}
+              className="rounded-lg border border-stone-200 dark:border-stone-800 p-5"
+            >
+              <div className="flex items-baseline gap-2 mb-2">
+                <FactionTag factionId={sub.id} />
+                <span className="text-xs text-stone-500">
+                  · {ss.length} settlement{ss.length === 1 ? "" : "s"} · {rs.length} region{rs.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {sub.loreSummary && (
+                <p className="text-sm opacity-80 mb-3">{sub.loreSummary}</p>
+              )}
+              {ss.length > 0 && (
+                <ul className="text-sm space-y-1">
+                  {ss.map((s) => (
+                    <li key={s.id}>
+                      <SettlementTag settlementId={s.id} withTier />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </section>
       )}
 

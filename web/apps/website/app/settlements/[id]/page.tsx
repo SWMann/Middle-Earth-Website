@@ -59,7 +59,7 @@ export default async function SettlementDetailPage({
     getFaction(s.factionId),
     getRegion(s.regionId),
     getSiblingSettlements(s.factionId, s.id),
-    getRecentEvents({ visibility: ["public"], factionId: s.factionId, limit: 6 }),
+    getRecentEvents({ visibility: ["public"], factionId: s.factionId, touching: true, limit: 6 }),
   ]);
 
   const populationPct =

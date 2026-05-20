@@ -40,6 +40,15 @@ export async function Nav() {
             </li>
           ))}
         </ul>
+        <form action="/search" method="get" className="hidden md:flex">
+          <input
+            type="text"
+            name="q"
+            placeholder="Search…"
+            aria-label="Search"
+            className="rounded border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 px-2 py-1 text-xs w-40"
+          />
+        </form>
         <div className="flex items-center gap-4 text-sm">
           <ThemeToggle />
           {user ? (
