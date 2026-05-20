@@ -238,6 +238,94 @@ type EventSeed = {
   daysAgo: number;
 };
 
+type WikiSeed = { slug: string; title: string; category: string; body: string };
+
+const wikiPages: WikiSeed[] = [
+  {
+    slug: "getting-started",
+    title: "Getting started",
+    category: "Getting Started",
+    body: `Welcome. This is a modded Minecraft server set in the late Third Age of Middle-earth. You'll play a character, belong to a faction, build settlements, trade, fight, and tell stories.
+
+## How to join
+
+1. **Read this page and the [mechanics overview](/wiki/mechanics-overview).** Five minutes will save you an hour later.
+2. **Pick a faction.** Browse [the factions index](/factions) — every faction is recruiting. Click any card to see what they hold and what they're about.
+3. **Sign in with Discord** (top right). That creates your account.
+4. **Link your Minecraft username.** Hit "Link Minecraft" in the nav after signing in. You'll get a one-time code to enter in-game.
+5. **Hop into Discord.** Faction officers will say hi and point you at your first task.
+
+## What to expect in your first hour
+
+- You'll be greeted in the in-game chat and on Discord
+- You'll be given a small first task — building a hovel, working a farm, escorting a caravan
+- You'll have somewhere to look for "what's next" (your faction's Discord channel and the dashboard once it lands in Phase 3)
+
+## What you can't do yet
+
+This is **Phase 2**. The website shows the world's state and lets you browse it. Game actions — recruiting units, claiming regions, declaring wars — arrive as the mod is built out alongside.`,
+  },
+  {
+    slug: "mechanics-overview",
+    title: "Mechanics overview",
+    category: "Mechanics",
+    body: `A whirlwind tour of how the server works. Each section has its own page once we get to writing them.
+
+## The three currencies
+
+- **Diplomacy Points (DP)** — for things between factions: alliances, war declarations, trade deals, claiming new regions.
+- **Coin** — for things inside a faction: founding settlements, building districts, military upkeep, caravans.
+- **Influence** — personal, per-character: council vote weight, personal questlines, character advancement.
+
+**They don't convert.** Wealth doesn't buy alliances; a popular character can't personally fund a war.
+
+## Settlements and tiers
+
+Every settlement has a tier (Hamlet → Steading → Village → Burgh → Town → City → Great City → Capital). Higher tiers unlock more districts and bigger garrisons. Village and above can also *claim* a new region for the faction.
+
+## Districts
+
+Settlements are made of districts: housing, farms, mines, smithies, markets, military barracks, governance halls. Districts consume and produce **resources** that flow between settlements via **trade routes**.
+
+## Factions
+
+Major factions are the canon ones (Gondor, Rohan, Mordor, Isengard, Lothlórien, Erebor, Dale, Rivendell, the Shire, plus the evils — Harad, Rhûn, Dunland). Subfactions like Dol Amroth or the Iron Hills operate within a parent. Player-founded minor factions exist within canon-permitted spaces.
+
+## Wars
+
+Wars are declared, fought, and resolved through both mechanical battles (armies clash) and RP scenes (councils, peace talks). Casualties are permanent and individually re-recruited — wars cost.
+
+## Characters
+
+Each player has one active character. Wounds stack; the more your character has suffered, the more dangerous each new fight becomes. Death is possible, lineages and heirs are real. **Cautious characters can have long careers.**`,
+  },
+  {
+    slug: "what-this-server-is",
+    title: "What this server is",
+    category: "Getting Started",
+    body: `> A 4X civ-builder with strong RP scaffolding. Prosperity, conquest, and diplomacy are the engines; character and lore are the texture.
+
+We are **canon-inspired, not canon-bound**. The world is Tolkien's. The history is the players'.
+
+## Pillars
+
+1. **Economy and building** — settlements, districts, supply chains, and trade are the daily rhythm.
+2. **Combat and conquest** — wars are real, consequential, and resolved through both mechanical and RP systems.
+3. **Diplomacy** — alliances, councils, and treaties shape the map.
+4. **Story** — character arcs and written lore give the mechanics meaning.
+
+When pillars conflict, the higher one wins.
+
+## What we're not
+
+- Not a recreation of the reference server. We borrow its mechanical vocabulary but we are not its successor.
+- Not a hardcore-only experience. Punishment is for grief and abuse, not for new players learning the systems.
+- Not staff-driven. Staff exist to adjudicate edge cases, approve major builds, and run world events.
+- Not lore-purists. Players who want to write themselves into Middle-earth's history are the audience.
+- Not a PvP arena. PvP exists in the service of war and story, not as the point.`,
+  },
+];
+
 const events: EventSeed[] = [
   {
     eventType: "FACTION_FOUNDED",
@@ -379,13 +467,36 @@ async function main() {
     });
   }
 
+  console.log("Seeding wiki pages…");
+  for (const w of wikiPages) {
+    await db
+      .insert(schema.wikiPages)
+      .values({
+        slug: w.slug,
+        title: w.title,
+        body: w.body,
+        visibility: "public",
+        published: true,
+        metadata: { category: w.category },
+      })
+      .onConflictDoUpdate({
+        target: schema.wikiPages.slug,
+        set: {
+          title: w.title,
+          body: w.body,
+          metadata: { category: w.category },
+        },
+      });
+  }
+
   const factionCount = await db.select().from(schema.factions);
   const regionCount = await db.select().from(schema.regions);
   const settlementCount = await db.select().from(schema.settlements);
   const eventCount = await db.select().from(schema.events);
+  const wikiCount = await db.select().from(schema.wikiPages);
 
   console.log(
-    `✓ Seed complete: ${factionCount.length} factions, ${regionCount.length} regions, ${settlementCount.length} settlements, ${eventCount.length} events.`,
+    `✓ Seed complete: ${factionCount.length} factions, ${regionCount.length} regions, ${settlementCount.length} settlements, ${eventCount.length} events, ${wikiCount.length} wiki pages.`,
   );
 }
 
