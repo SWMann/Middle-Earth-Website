@@ -4,6 +4,9 @@ import { getPage, isAdmin } from "@/lib/data/wiki";
 import { safeAuth } from "@/lib/auth-helpers";
 import { saveWikiPage } from "./actions";
 
+// Admin-gated and per-user — never prerender.
+export const dynamic = "force-dynamic";
+
 type Params = { slug: string };
 
 export default async function WikiEditPage({
