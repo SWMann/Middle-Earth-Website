@@ -4,6 +4,8 @@ import {
   getSettlement,
   getAllSettlementIds,
   getSiblingSettlements,
+  getDistrictsAtSettlement,
+  getUnitsGarrisonedAt,
 } from "@/lib/data/settlements";
 import { getFaction } from "@/lib/data/factions";
 import { getRegion } from "@/lib/data/regions";
@@ -55,12 +57,16 @@ export default async function SettlementDetailPage({
   const s = await getSettlement(numericId);
   if (!s) notFound();
 
-  const [faction, region, siblings, events] = await Promise.all([
+  const [faction, region, siblings, districts, garrison, events] = await Promise.all([
     getFaction(s.factionId),
     getRegion(s.regionId),
     getSiblingSettlements(s.factionId, s.id),
+    getDistrictsAtSettlement(s.id),
+    getUnitsGarrisonedAt(s.id),
     getRecentEvents({ visibility: ["public"], factionId: s.factionId, touching: true, limit: 6 }),
   ]);
+
+  const garrisonTotal = garrison.reduce((sum, u) => sum + u.count, 0);
 
   const populationPct =
     s.populationCap > 0
@@ -112,18 +118,45 @@ export default async function SettlementDetailPage({
               day: "numeric",
             })}
           />
-          <Stat label="Districts" value="—" sub="Phase 3" />
+          <Stat
+            label="Garrison"
+            value={garrisonTotal.toString()}
+            sub={`${garrison.length} unit type${garrison.length === 1 ? "" : "s"}`}
+          />
         </dl>
       </section>
 
-      {/* ----- Two columns: districts placeholder + neighbours ----- */}
+      {/* ----- Two columns: districts + neighbours ----- */}
       <section className="grid md:grid-cols-2 gap-10">
         <div>
           <h2 className="text-lg font-semibold mb-4">Districts</h2>
-          <p className="text-sm opacity-60 italic">
-            Districts, supply chains, and garrison composition come online in
-            Phase 3 once the mod is writing them.
-          </p>
+          {districts.length === 0 ? (
+            <p className="text-sm opacity-60 italic">
+              No districts built yet.
+            </p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {districts.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex items-baseline gap-2 flex-wrap"
+                >
+                  <span className="font-medium">{prettyType(d.districtType)}</span>
+                  <span className="text-xs text-stone-500">
+                    {capitalise(d.category)}
+                  </span>
+                  {d.popCost > 0 && (
+                    <span className="text-xs text-stone-500 tabular-nums">
+                      pop {d.popCost}
+                    </span>
+                  )}
+                  {d.active === "false" && (
+                    <span className="text-xs text-amber-600">inactive</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div>
@@ -146,6 +179,33 @@ export default async function SettlementDetailPage({
         </div>
       </section>
 
+      {/* ----- Garrison ----- */}
+      <section>
+        <h2 className="text-lg font-semibold mb-4">
+          Garrison
+          <span className="ml-2 text-xs text-stone-500 font-normal tabular-nums">
+            {garrisonTotal} total
+          </span>
+        </h2>
+        {garrison.length === 0 ? (
+          <p className="text-sm opacity-60 italic">
+            No units garrisoned here.
+          </p>
+        ) : (
+          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            {garrison.map((u) => (
+              <li
+                key={u.id}
+                className="flex items-baseline justify-between border-b border-stone-100 dark:border-stone-900 py-1.5"
+              >
+                <span>{prettyType(u.unitType)}</span>
+                <span className="tabular-nums opacity-70">{u.count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {/* ----- Recent events ----- */}
       <section>
         <h2 className="text-lg font-semibold mb-4">
@@ -164,13 +224,24 @@ export default async function SettlementDetailPage({
   );
 }
 
+function prettyType(snake: string): string {
+  return snake
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function capitalise(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function Stat({
   label,
   value,
   sub,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   sub?: string;
 }) {
   return (

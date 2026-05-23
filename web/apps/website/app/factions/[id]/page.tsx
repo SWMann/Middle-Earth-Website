@@ -8,9 +8,11 @@ import {
   getSettlementsByFaction,
 } from "@/lib/data/factions";
 import { getRecentEvents } from "@/lib/data/events";
+import { getCharactersByFaction } from "@/lib/data/characters";
 import { FactionTag } from "@/components/tags/faction-tag";
 import { RegionTag } from "@/components/tags/region-tag";
 import { SettlementTag } from "@/components/tags/settlement-tag";
+import { CharacterTag } from "@/components/tags/character-tag";
 import { AuditFeed } from "@/components/audit-feed";
 
 export const revalidate = 60;
@@ -43,13 +45,18 @@ export default async function FactionDetailPage({
   const f = await getFaction(id);
   if (!f) notFound();
 
-  const [parent, subs, regions, settlements, events] = await Promise.all([
+  const [parent, subs, regions, settlements, characters, events] = await Promise.all([
     f.parentFactionId ? getFaction(f.parentFactionId) : Promise.resolve(null),
     getSubfactions(f.id),
     getRegionsClaimedBy(f.id),
     getSettlementsByFaction(f.id),
+    getCharactersByFaction(f.id),
     getRecentEvents({ visibility: ["public"], factionId: f.id, touching: true, limit: 10 }),
   ]);
+
+  // Faction leader = highest-influence active character. Reasonable
+  // approximation until a leader_uuid is explicitly set on factions.
+  const leader = [...characters].sort((a, b) => b.influence - a.influence)[0] ?? null;
 
   // Subfaction holdings — fetched per-sub so we can show them grouped on the
   // parent's page (the player expectation is "Gondor's stuff includes Dol
@@ -108,7 +115,10 @@ export default async function FactionDetailPage({
           <Stat label="Regions claimed" value={regions.length.toString()} />
           <Stat label="Settlements" value={settlements.length.toString()} />
           <Stat label="Subfactions" value={subs.length.toString()} />
-          <Stat label="Faction leader" value="—" />
+          <Stat
+            label="Faction leader"
+            value={leader ? <CharacterTag characterId={leader.id} /> : "—"}
+          />
         </dl>
       </section>
 
@@ -181,6 +191,36 @@ export default async function FactionDetailPage({
         </section>
       )}
 
+      {/* ----- Members ----- */}
+      {characters.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-4">Notable members</h2>
+          <ul className="space-y-2 text-sm">
+            {[...characters]
+              .sort((a, b) => b.influence - a.influence)
+              .map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-baseline gap-3 flex-wrap"
+                >
+                  <CharacterTag characterId={c.id} />
+                  <span className="text-xs text-stone-500 tabular-nums">
+                    Inf {c.influence}
+                  </span>
+                  <span className="text-xs text-stone-500 tabular-nums">
+                    Wnd {c.woundScore}
+                  </span>
+                  {c.currentRegionId && (
+                    <span className="text-xs text-stone-500">
+                      <RegionTag regionId={c.currentRegionId} idOnly />
+                    </span>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
+
       {/* ----- Recent events ----- */}
       <section>
         <h2 className="text-lg font-semibold mb-4">Recent events</h2>
@@ -193,7 +233,13 @@ export default async function FactionDetailPage({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div>
       <dt className="text-xs uppercase tracking-widest opacity-60">{label}</dt>

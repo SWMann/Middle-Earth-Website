@@ -238,6 +238,139 @@ type EventSeed = {
   daysAgo: number;
 };
 
+// --- Phase 3.1 seed data --------------------------------------------------
+
+type CharacterSeed = {
+  factionId: string;
+  name: string;
+  race: "man" | "elf" | "dwarf" | "hobbit" | "orc";
+  title: string | null;
+  birthYearRp: number;
+  woundScore: number;
+  influence: number;
+  currentRegionId: string | null;
+  biography: string;
+};
+
+const characters_seed: CharacterSeed[] = [
+  { factionId: "gondor", name: "Faramir of Ithilien", race: "man", title: "Steward of Gondor", birthYearRp: 2983, woundScore: 12, influence: 180, currentRegionId: "AR01",
+    biography: "Captain of the Rangers of Ithilien before the War; now Steward of the City under King Elessar. Reads in Minas Tirith's archives more than rumours suggest." },
+  { factionId: "rohan", name: "Éomer Éadig", race: "man", title: "King of the Mark", birthYearRp: 2991, woundScore: 8, influence: 220, currentRegionId: "RW01",
+    biography: "Third Marshal of the Mark during the War; now king after the Battle of the Pelennor. Holds the Oath of Eorl as the spine of policy." },
+  { factionId: "mordor", name: "Mauhúr the Black-Eyed", race: "orc", title: "Captain of the Watch", birthYearRp: 2967, woundScore: 34, influence: 90, currentRegionId: "MM01",
+    biography: "Risen through Sauron's siegeworks. Bears scars from the Pelennor. Reports directly to the Mouth." },
+  { factionId: "isengard", name: "Snaga the Pale", race: "orc", title: "Overseer", birthYearRp: 2975, woundScore: 21, influence: 60, currentRegionId: "IS01",
+    biography: "Uruk-hai foreman of the Orthanc pits since Saruman's flight. Pragmatic where his kin are zealots." },
+  { factionId: "lothlorien", name: "Haldir of Lórien", race: "elf", title: "Marchwarden", birthYearRp: 2400, woundScore: 2, influence: 260, currentRegionId: "LO01",
+    biography: "Marchwarden of the northern fences. Old by mortal reckoning, young by his own. Survived Helm's Deep against Galadriel's expectation." },
+  { factionId: "rivendell", name: "Elrohir Elrondion", race: "elf", title: "Heir of Imladris", birthYearRp: 130, woundScore: 4, influence: 200, currentRegionId: "RV01",
+    biography: "Son of Elrond; rode with the Rangers of the North through the War. Stayed in Imladris when his sister and father sailed." },
+  { factionId: "erebor", name: "Thorin Stonehelm", race: "dwarf", title: "King under the Mountain", birthYearRp: 2866, woundScore: 18, influence: 240, currentRegionId: "EB01",
+    biography: "Held the King's seat through the Battle of Dale. Diplomatic where his ancestors were not." },
+  { factionId: "dale", name: "Bard II", race: "man", title: "King of Dale", birthYearRp: 2977, woundScore: 6, influence: 150, currentRegionId: "DL01",
+    biography: "Grandson of Bard the Bowman. Rebuilt the long market after the War." },
+  { factionId: "shire", name: "Meriadoc Brandybuck", race: "hobbit", title: "Master of Buckland", birthYearRp: 2982, woundScore: 9, influence: 170, currentRegionId: "SH01",
+    biography: "Esquire of Rohan, slayer of the Witch-king alongside Éowyn. Returned to the Shire and the Mathom-house." },
+  { factionId: "harad", name: "Suladân the Younger", race: "man", title: "Serpent-lord of Harad", birthYearRp: 2972, woundScore: 22, influence: 130, currentRegionId: "HA01",
+    biography: "Heir to the southern banners. Considers Gondor's victory a setback, not a verdict." },
+  { factionId: "rhun", name: "Khamûl-tan", race: "man", title: "Wagon-king", birthYearRp: 2960, woundScore: 15, influence: 110, currentRegionId: "RH01",
+    biography: "Named for the Easterling Nazgûl in mockery or homage. Leads the chariot-cohorts of the inland sea." },
+  { factionId: "dunland", name: "Wulf of the Hills", race: "man", title: "Chieftain", birthYearRp: 2980, woundScore: 11, influence: 70, currentRegionId: "DN01",
+    biography: "Carries his clan's old grievance against Rohan. Trades cautiously with Isengard's leftovers." },
+  { factionId: "dol_amroth", name: "Imrahil II", race: "man", title: "Prince of Dol Amroth", birthYearRp: 2988, woundScore: 5, influence: 190, currentRegionId: "DA01",
+    biography: "Half-elven heritage worn lightly. Captain of the Swan Knights since the War's end." },
+  { factionId: "iron_hills", name: "Náin IV", race: "dwarf", title: "Lord of the Iron Hills", birthYearRp: 2920, woundScore: 14, influence: 160, currentRegionId: "IH01",
+    biography: "Direct line from Dáin Ironfoot. Heavy-axe of the Eastern Front." },
+];
+
+type DistrictSeed = {
+  settlementName: string;
+  districtType: string;
+  category: string;
+  popCost: number;
+};
+
+const districts_seed: DistrictSeed[] = [
+  // Capitals get a baseline 4-district loadout: residential + agricultural
+  // + military + governance. Real settlements would have many more; this is
+  // enough to make the dashboards look populated.
+  ...[
+    "Minas Tirith", "Edoras", "Barad-dûr", "Isengard",
+    "Caras Galadhon", "Imladris", "Erebor", "Dale",
+    "Michel Delving", "Umbar", "Dol Amroth", "Iron Hills Hold",
+  ].flatMap((settlementName) => [
+    { settlementName, districtType: "cottage_quarter", category: "residential", popCost: 0 },
+    { settlementName, districtType: "wheat_farm", category: "agricultural", popCost: 4 },
+    { settlementName, districtType: "barracks", category: "military", popCost: 2 },
+    { settlementName, districtType: "great_hall", category: "governance", popCost: 3 },
+  ]),
+];
+
+type UnitSeed = {
+  unitType: string;
+  factionId: string;
+  count: number;
+  garrisonedAtName: string;
+};
+
+const units_seed: UnitSeed[] = [
+  { factionId: "gondor", unitType: "citadel_guard", count: 60, garrisonedAtName: "Minas Tirith" },
+  { factionId: "gondor", unitType: "tower_archer", count: 80, garrisonedAtName: "Minas Tirith" },
+  { factionId: "rohan", unitType: "rohirrim", count: 120, garrisonedAtName: "Edoras" },
+  { factionId: "mordor", unitType: "uruk_hai", count: 200, garrisonedAtName: "Barad-dûr" },
+  { factionId: "mordor", unitType: "orc_archer", count: 150, garrisonedAtName: "Barad-dûr" },
+  { factionId: "isengard", unitType: "uruk_hai", count: 100, garrisonedAtName: "Isengard" },
+  { factionId: "lothlorien", unitType: "galadhrim_warden", count: 60, garrisonedAtName: "Caras Galadhon" },
+  { factionId: "rivendell", unitType: "imladris_blade", count: 40, garrisonedAtName: "Imladris" },
+  { factionId: "erebor", unitType: "longbeard_warrior", count: 80, garrisonedAtName: "Erebor" },
+  { factionId: "dale", unitType: "dale_archer", count: 50, garrisonedAtName: "Dale" },
+  { factionId: "harad", unitType: "haradrim_lancer", count: 90, garrisonedAtName: "Umbar" },
+  { factionId: "rhun", unitType: "easterling_charioteer", count: 70, garrisonedAtName: "Rhûn Anchorage" },
+  { factionId: "dol_amroth", unitType: "swan_knight", count: 50, garrisonedAtName: "Dol Amroth" },
+  { factionId: "iron_hills", unitType: "iron_hills_axe", count: 60, garrisonedAtName: "Iron Hills Hold" },
+];
+
+const resourceStocks_seed: { factionId: string; resourceId: string; quantity: number }[] = [
+  { factionId: "gondor", resourceId: "R:Wheat", quantity: 240 },
+  { factionId: "gondor", resourceId: "R:Iron", quantity: 80 },
+  { factionId: "gondor", resourceId: "R:Stone", quantity: 200 },
+  { factionId: "rohan", resourceId: "R:Wheat", quantity: 320 },
+  { factionId: "rohan", resourceId: "R:Horses", quantity: 60 },
+  { factionId: "mordor", resourceId: "R:Iron", quantity: 180 },
+  { factionId: "mordor", resourceId: "R:Coal", quantity: 240 },
+  { factionId: "isengard", resourceId: "R:Iron", quantity: 140 },
+  { factionId: "isengard", resourceId: "R:Coal", quantity: 200 },
+  { factionId: "lothlorien", resourceId: "R:Mallorn", quantity: 40 },
+  { factionId: "rivendell", resourceId: "R:Athelas", quantity: 12 },
+  { factionId: "erebor", resourceId: "R:Mithril_Ore", quantity: 8 },
+  { factionId: "erebor", resourceId: "R:Iron", quantity: 220 },
+  { factionId: "dale", resourceId: "R:Wheat", quantity: 100 },
+  { factionId: "shire", resourceId: "R:Pipeweed", quantity: 60 },
+  { factionId: "shire", resourceId: "R:Wheat", quantity: 180 },
+  { factionId: "harad", resourceId: "R:Spices", quantity: 80 },
+  { factionId: "rhun", resourceId: "R:Horses", quantity: 50 },
+  { factionId: "dol_amroth", resourceId: "R:Pearl", quantity: 24 },
+  { factionId: "iron_hills", resourceId: "R:Iron", quantity: 280 },
+];
+
+// [factionId, treasuryCoin, treasuryDp]
+const treasury_seed: [string, number, number][] = [
+  ["gondor", 4200, 1800],
+  ["rohan", 2400, 1200],
+  ["mordor", 6800, 800],
+  ["isengard", 3200, 400],
+  ["lothlorien", 1800, 2400],
+  ["rivendell", 2200, 2600],
+  ["erebor", 5400, 1400],
+  ["dale", 1800, 1000],
+  ["shire", 900, 800],
+  ["harad", 3600, 600],
+  ["rhun", 2400, 500],
+  ["dunland", 600, 200],
+  ["dol_amroth", 1800, 800],
+  ["iron_hills", 2200, 700],
+];
+
 type WikiSeed = { slug: string; title: string; category: string; body: string };
 
 const wikiPages: WikiSeed[] = [
@@ -465,6 +598,103 @@ async function main() {
       payload: e.payload,
       occurredAt,
     });
+  }
+
+  // --- New Phase 3.1 tables ---------------------------------------------
+
+  console.log("Seeding seed-bot account (owns NPC characters)…");
+  await db
+    .insert(schema.accounts)
+    .values({
+      discordId: "seed-bot",
+      discordUsername: "seed-bot",
+      discordAvatar: null,
+      email: null,
+    })
+    .onConflictDoNothing();
+
+  console.log("Seeding characters, districts, units, resources…");
+  // Clear-and-reinsert for the new tables. Real-mod state accumulates; the
+  // seed represents a clean Day 0.
+  await db.execute(sqlOp`DELETE FROM game.resource_stocks`);
+  await db.execute(sqlOp`DELETE FROM game.units`);
+  await db.execute(sqlOp`DELETE FROM game.armies`);
+  await db.execute(sqlOp`DELETE FROM game.districts`);
+  await db.execute(sqlOp`DELETE FROM game.characters`);
+
+  // One character per faction (including subfactions). Real player
+  // characters are created via the UI later; seed-bot just ensures the
+  // faction pages and audit feeds have someone visible to reference.
+  for (const c of characters_seed) {
+    await db.insert(schema.characters).values({
+      playerDiscordId: "seed-bot",
+      factionId: c.factionId,
+      name: c.name,
+      race: c.race,
+      title: c.title,
+      birthYearRp: c.birthYearRp,
+      status: "active",
+      woundScore: c.woundScore,
+      influence: c.influence,
+      currentRegionId: c.currentRegionId,
+      biography: c.biography,
+    });
+  }
+
+  // Capital settlements get a baseline district loadout. Look up each
+  // settlement's id by name + region so we don't have to track autoinc IDs.
+  const allSettlements = await db.select().from(schema.settlements);
+  const settlementByName = new Map(allSettlements.map((s) => [s.name, s]));
+
+  for (const d of districts_seed) {
+    const s = settlementByName.get(d.settlementName);
+    if (!s) continue;
+    await db.insert(schema.districts).values({
+      settlementId: s.id,
+      districtType: d.districtType,
+      category: d.category,
+      popCost: d.popCost,
+      active: "true",
+    });
+  }
+
+  // Unit stacks garrisoned at the capital settlements.
+  for (const u of units_seed) {
+    const s = settlementByName.get(u.garrisonedAtName);
+    if (!s) continue;
+    await db.insert(schema.units).values({
+      unitType: u.unitType,
+      factionId: u.factionId,
+      count: u.count,
+      garrisonedAt: s.id,
+    });
+  }
+
+  // Resource stocks per faction. Coin lives on factions.treasury_coin, not
+  // here, so this seed covers commodities only.
+  for (const r of resourceStocks_seed) {
+    await db
+      .insert(schema.resourceStocks)
+      .values({
+        factionId: r.factionId,
+        resourceId: r.resourceId,
+        quantity: r.quantity,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.resourceStocks.factionId,
+          schema.resourceStocks.resourceId,
+        ],
+        set: { quantity: r.quantity },
+      });
+  }
+
+  // Bump some faction treasuries so the dashboards show realistic numbers.
+  for (const [factionId, coin, dp] of treasury_seed) {
+    await db
+      .update(schema.factions)
+      .set({ treasuryCoin: coin, treasuryDp: dp })
+      .where(sqlOp`${schema.factions.id} = ${factionId}`);
   }
 
   console.log("Seeding wiki pages…");

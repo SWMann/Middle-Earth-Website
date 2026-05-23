@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { eq, ne, and } from "drizzle-orm";
+import { eq, ne, and, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 
 export const getSettlement = cache(async (id: number) => {
@@ -36,3 +36,24 @@ export const getSiblingSettlements = cache(
       .orderBy(schema.settlements.name);
   },
 );
+
+export const getDistrictsAtSettlement = cache(async (settlementId: number) => {
+  return await db
+    .select()
+    .from(schema.districts)
+    .where(eq(schema.districts.settlementId, settlementId))
+    .orderBy(schema.districts.category, schema.districts.districtType);
+});
+
+export const getUnitsGarrisonedAt = cache(async (settlementId: number) => {
+  return await db
+    .select()
+    .from(schema.units)
+    .where(
+      and(
+        eq(schema.units.garrisonedAt, settlementId),
+        isNotNull(schema.units.garrisonedAt),
+      ),
+    )
+    .orderBy(schema.units.unitType);
+});
