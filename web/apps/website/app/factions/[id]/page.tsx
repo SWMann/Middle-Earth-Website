@@ -8,7 +8,12 @@ import {
   getSettlementsByFaction,
 } from "@/lib/data/factions";
 import { getRecentEvents } from "@/lib/data/events";
-import { getCharactersByFaction } from "@/lib/data/characters";
+import {
+  getCharactersByFaction,
+  getActiveCharacterForPlayer,
+} from "@/lib/data/characters";
+import { safeAuth } from "@/lib/auth-helpers";
+import { isAdmin } from "@/lib/data/wiki";
 import { FactionTag } from "@/components/tags/faction-tag";
 import { RegionTag } from "@/components/tags/region-tag";
 import { SettlementTag } from "@/components/tags/settlement-tag";
@@ -58,6 +63,17 @@ export default async function FactionDetailPage({
   // approximation until a leader_uuid is explicitly set on factions.
   const leader = [...characters].sort((a, b) => b.influence - a.influence)[0] ?? null;
 
+  // Show the dashboard link only to members (and admins). The dashboard
+  // itself re-checks permission, but advertising it to non-members would
+  // be UX noise.
+  const session = await safeAuth();
+  const viewerCharacter = session?.user
+    ? await getActiveCharacterForPlayer(session.user.discordId)
+    : null;
+  const canSeeDashboard =
+    viewerCharacter?.factionId === f.id ||
+    (session?.user && isAdmin(session.user.discordId));
+
   // Subfaction holdings — fetched per-sub so we can show them grouped on the
   // parent's page (the player expectation is "Gondor's stuff includes Dol
   // Amroth's stuff" even though they're separate factions in the model).
@@ -73,22 +89,32 @@ export default async function FactionDetailPage({
     <div className="mx-auto max-w-4xl px-6 py-16 space-y-12">
       {/* ----- Header ----- */}
       <header>
-        <p className="mb-2 text-xs uppercase tracking-widest opacity-60">
-          <Link href={{ pathname: "/factions" }} className="hover:underline">
-            Factions
-          </Link>
-          {parent && (
-            <>
-              {" · within "}
-              <Link
-                href={{ pathname: `/factions/${parent.id}` }}
-                className="hover:underline"
-              >
-                {parent.displayName}
-              </Link>
-            </>
+        <div className="mb-2 flex items-baseline justify-between gap-4">
+          <p className="text-xs uppercase tracking-widest opacity-60">
+            <Link href={{ pathname: "/factions" }} className="hover:underline">
+              Factions
+            </Link>
+            {parent && (
+              <>
+                {" · within "}
+                <Link
+                  href={{ pathname: `/factions/${parent.id}` }}
+                  className="hover:underline"
+                >
+                  {parent.displayName}
+                </Link>
+              </>
+            )}
+          </p>
+          {canSeeDashboard && (
+            <Link
+              href={{ pathname: `/factions/${f.id}/dashboard` }}
+              className="text-xs underline opacity-80 hover:opacity-100"
+            >
+              Internal dashboard &rarr;
+            </Link>
           )}
-        </p>
+        </div>
         <div className="flex items-center gap-3 mb-4">
           {f.bannerHex && (
             <span

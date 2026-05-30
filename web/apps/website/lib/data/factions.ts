@@ -62,3 +62,19 @@ export const getSettlementsByFaction = cache(async (factionId: string) => {
     .where(eq(schema.settlements.factionId, factionId))
     .orderBy(schema.settlements.name);
 });
+
+export const getUnitsByFaction = cache(async (factionId: string) => {
+  return await db
+    .select()
+    .from(schema.units)
+    .where(eq(schema.units.factionId, factionId))
+    .orderBy(schema.units.unitType);
+});
+
+export const getResourceStocksByFaction = cache(async (factionId: string) => {
+  return await db
+    .select()
+    .from(schema.resourceStocks)
+    .where(eq(schema.resourceStocks.factionId, factionId))
+    .orderBy(schema.resourceStocks.resourceId);
+});
