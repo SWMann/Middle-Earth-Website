@@ -19,6 +19,14 @@ export const getAllCharacterIds = cache(async () => {
   return rows.map((r) => r.id);
 });
 
+export const getAllActiveCharacters = cache(async () => {
+  return await db
+    .select()
+    .from(schema.characters)
+    .where(eq(schema.characters.status, "active"))
+    .orderBy(schema.characters.factionId, schema.characters.name);
+});
+
 export const getCharactersByFaction = cache(async (factionId: string) => {
   return await db
     .select()

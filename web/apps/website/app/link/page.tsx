@@ -12,7 +12,7 @@ export default async function LinkPage() {
   return (
     <section className="mx-auto max-w-2xl px-6 py-16">
       <p className="mb-2 text-xs uppercase tracking-widest opacity-60">
-        Phase 1 &middot; Foundation
+        Account &middot; Minecraft link
       </p>
       <h1 className="mb-4 text-3xl font-semibold">Link Minecraft</h1>
       <p className="mb-6 opacity-80">

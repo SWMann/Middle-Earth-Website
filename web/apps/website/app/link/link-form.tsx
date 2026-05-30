@@ -57,8 +57,8 @@ export function LinkForm({ mockEnabled }: { mockEnabled: boolean }) {
             Dev seeder (mock mode)
           </p>
           <p className="mb-3 opacity-80">
-            No real Minecraft server in Phase 1. Click to issue a fake code
-            you can redeem in the form above.
+            The mod isn&apos;t writing real codes yet. Click to issue a fake
+            code you can redeem in the form above.
           </p>
           <button
             type="button"

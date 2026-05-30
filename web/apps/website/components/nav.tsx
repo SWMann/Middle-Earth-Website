@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { signIn, signOut } from "@/auth";
 import { safeAuth, lookupMcLink } from "@/lib/auth-helpers";
+import { getNotificationsForUser } from "@/lib/data/notifications";
+import { NotificationsBell } from "./notifications/bell";
+import { AuditFeed } from "./audit-feed";
 import { ThemeToggle } from "./theme-toggle";
 
 const publicLinks = [
@@ -51,6 +54,7 @@ export async function Nav() {
         </form>
         <div className="flex items-center gap-4 text-sm">
           <ThemeToggle />
+          {user && <NotificationsForUser discordId={user.discordId} />}
           {user ? (
             <>
               {!mcLink && (
@@ -85,5 +89,22 @@ export async function Nav() {
         </div>
       </nav>
     </header>
+  );
+}
+
+/**
+ * Server-rendered wrapper around <NotificationsBell>. Fetches the
+ * faction-scoped event feed and the unread count, then composes the
+ * AuditFeed inside the client-side bell component.
+ */
+async function NotificationsForUser({ discordId }: { discordId: string }) {
+  const { events, unreadCount } = await getNotificationsForUser(discordId, 10);
+  return (
+    <NotificationsBell unreadCount={unreadCount}>
+      <AuditFeed
+        events={events}
+        empty="No recent activity from your faction."
+      />
+    </NotificationsBell>
   );
 }

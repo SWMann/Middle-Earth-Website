@@ -34,6 +34,14 @@ export const accounts = web.table("accounts", {
   email: text("email"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  /**
+   * Used by the notifications bell to decide which events count as
+   * "unread". Updated when the user opens the dropdown. Null = never
+   * checked (all faction events appear as unread).
+   */
+  lastNotificationsViewedAt: timestamp("last_notifications_viewed_at", {
+    withTimezone: true,
+  }),
 });
 
 export const mcLinks = web.table("mc_links", {

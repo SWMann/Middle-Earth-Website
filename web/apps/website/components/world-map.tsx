@@ -309,8 +309,8 @@ function IdlePanel({
         <Field label="Settlements">{settlementCount}</Field>
       </dl>
       <p className="opacity-50 leading-relaxed pt-2 border-t border-stone-200 dark:border-stone-800">
-        Phase 2 map: claims and settlements. Trade routes, watchtower sight,
-        and armies arrive in Phase 3.
+        Map shows claims and settlements. Trade routes, watchtower sight,
+        and armies in transit arrive in later phases.
       </p>
     </div>
   );
