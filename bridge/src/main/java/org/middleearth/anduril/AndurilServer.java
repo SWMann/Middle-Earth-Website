@@ -7,15 +7,13 @@ import net.minecraft.server.MinecraftServer;
 /**
  * Server-side Andúril.
  *
- * <p>This is where the bridge actually does its work — read the daily-tick
- * scheduler at server-start, expose the HTTP API the website calls,
- * connect to Postgres. Everything in here runs only on dedicated servers
- * (not on the integrated client server).
- *
- * <p>Phase-1 scaffold scope: log lifecycle events, prove the entrypoint
- * is wired. HTTP API / DB / tick come next.
+ * <p>Owns the HTTP API lifecycle, and eventually the Postgres connection
+ * and daily-tick scheduler. Everything in here runs only on dedicated
+ * servers (not on the integrated client server).
  */
 public class AndurilServer implements DedicatedServerModInitializer {
+    private HttpApi httpApi;
+
     @Override
     public void onInitializeServer() {
         Anduril.LOGGER.info("Andúril server module — registering lifecycle hooks.");
@@ -27,7 +25,16 @@ public class AndurilServer implements DedicatedServerModInitializer {
 
     private void onStarting(MinecraftServer server) {
         Anduril.LOGGER.info("Server starting; Andúril attaching.");
-        // TODO: connect to Postgres, start HTTP API, register tick scheduler.
+        try {
+            httpApi = new HttpApi(server);
+            httpApi.start();
+        } catch (Exception e) {
+            Anduril.LOGGER.error("Failed to start Andúril HTTP API: {}", e.getMessage(), e);
+            // We deliberately don't rethrow — the MC server can still run
+            // without the bridge API, and partial-availability is better
+            // than crashing the whole world.
+        }
+        // TODO: connect to Postgres, register tick scheduler.
     }
 
     private void onStarted(MinecraftServer server) {
@@ -36,6 +43,10 @@ public class AndurilServer implements DedicatedServerModInitializer {
 
     private void onStopping(MinecraftServer server) {
         Anduril.LOGGER.info("Server stopping; Andúril detaching.");
+        if (httpApi != null) {
+            httpApi.stop();
+            httpApi = null;
+        }
         // TODO: drain HTTP requests, close DB pool, write final audit event.
     }
 }
