@@ -1,8 +1,12 @@
 package org.middleearth.anduril;
 
 import io.javalin.Javalin;
+import io.javalin.http.UnauthorizedResponse;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.MinecraftServer;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * Embedded HTTP API for the Andúril bridge mod.
@@ -17,19 +21,32 @@ import net.minecraft.server.MinecraftServer;
  * website on Vercel can reach us; production deployments should
  * additionally firewall the port to known callers.
  *
- * <p>Phase-1 scope: a single unauthenticated health endpoint.
- * Authentication via {@code X-Mod-Token} and the rest of the verb
- * surface (per {@code mod_spec.md} §5) come in subsequent commits.
+ * <p>Auth: every {@code /api/v1/*} endpoint except {@code /api/v1/health}
+ * requires the {@code X-Mod-Token} header. The expected value is read
+ * from the {@code ANDURIL_TOKEN} env at startup; if unset, the gate
+ * fails closed (all protected endpoints return 401). Comparison is
+ * constant-time to avoid timing-based token leaks.
  */
 public class HttpApi {
     public static final int DEFAULT_PORT = 8080;
     public static final String PORT_ENV = "ANDURIL_PORT";
+    public static final String TOKEN_ENV = "ANDURIL_TOKEN";
 
     private final MinecraftServer server;
+    private final byte[] expectedToken; // empty array if not configured
+    private final boolean tokenConfigured;
     private Javalin app;
 
     public HttpApi(MinecraftServer server) {
         this.server = server;
+        String fromEnv = System.getenv(TOKEN_ENV);
+        if (fromEnv == null || fromEnv.isBlank()) {
+            this.expectedToken = new byte[0];
+            this.tokenConfigured = false;
+        } else {
+            this.expectedToken = fromEnv.trim().getBytes(StandardCharsets.UTF_8);
+            this.tokenConfigured = true;
+        }
     }
 
     public void start() {
@@ -39,10 +56,18 @@ public class HttpApi {
             config.showJavalinBanner = false;
         });
 
+        registerAuthGate(app);
         registerRoutes(app);
 
         app.start("0.0.0.0", port);
         Anduril.LOGGER.info("Andúril HTTP API listening on 0.0.0.0:{}", port);
+        if (!tokenConfigured) {
+            Anduril.LOGGER.warn(
+                "{} is not set — all protected endpoints will return 401. " +
+                "Set it before any non-health endpoint can be reached.",
+                TOKEN_ENV
+            );
+        }
     }
 
     public void stop() {
@@ -52,18 +77,46 @@ public class HttpApi {
         }
     }
 
+    /**
+     * Reject any /api/v1/* request without a matching X-Mod-Token, except
+     * /api/v1/health which is intentionally open for liveness probes.
+     */
+    private void registerAuthGate(Javalin app) {
+        app.before("/api/v1/*", ctx -> {
+            if ("/api/v1/health".equals(ctx.path())) return;
+            if (!tokenConfigured) {
+                throw new UnauthorizedResponse("ANDURIL_TOKEN not configured");
+            }
+            String header = ctx.header("X-Mod-Token");
+            if (header == null || header.isEmpty()) {
+                throw new UnauthorizedResponse("Missing X-Mod-Token header");
+            }
+            byte[] presented = header.getBytes(StandardCharsets.UTF_8);
+            if (!MessageDigest.isEqual(presented, expectedToken)) {
+                throw new UnauthorizedResponse("Invalid X-Mod-Token");
+            }
+        });
+    }
+
     private void registerRoutes(Javalin app) {
-        // Lightweight liveness/readiness check. Used by the website to
-        // confirm the mod is reachable and by ops for health monitoring.
+        // Open: liveness / readiness check.
         app.get("/api/v1/health", ctx -> {
             String mcVersion = SharedConstants.getGameVersion().getName();
             int playerCount = server.getCurrentPlayerCount();
             int maxPlayers = server.getMaxPlayerCount();
-            // Hand-rolled JSON — no Jackson dep needed for one endpoint. We'll
-            // bring in a JSON binder when the API surface grows.
             String body = String.format(
                 "{\"status\":\"ok\",\"mc_version\":\"%s\",\"players\":{\"online\":%d,\"max\":%d}}",
                 escape(mcVersion), playerCount, maxPlayers
+            );
+            ctx.contentType("application/json").result(body);
+        });
+
+        // Protected: bridge metadata for ops + sanity-checking the auth gate.
+        app.get("/api/v1/admin/info", ctx -> {
+            String body = String.format(
+                "{\"mod\":\"anduril\",\"version\":\"%s\",\"mc_version\":\"%s\",\"auth\":\"ok\"}",
+                escape(Anduril.MOD_VERSION),
+                escape(SharedConstants.getGameVersion().getName())
             );
             ctx.contentType("application/json").result(body);
         });
