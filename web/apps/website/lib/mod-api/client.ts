@@ -16,6 +16,8 @@ import type {
   RedeemLinkCodeResponse,
   GrantTreasuryRequest,
   GrantTreasuryResponse,
+  RecruitUnitsRequest,
+  RecruitUnitsResponse,
 } from "@modspec/api-types";
 import { MockModApiError, mockRedeemLinkCode } from "./mock";
 
@@ -73,6 +75,30 @@ export async function grantTreasury(
   }
   return await modPost<GrantTreasuryResponse>(
     `/admin/factions/${encodeURIComponent(factionId)}/grant`,
+    req,
+  );
+}
+
+/**
+ * Recruit units at a settlement. Charges Coin from the settlement's
+ * faction treasury and consumes settlement population. Always goes
+ * through the real bridge.
+ */
+export async function recruitUnits(
+  settlementId: number,
+  req: RecruitUnitsRequest,
+): Promise<RecruitUnitsResponse> {
+  if (shouldMock()) {
+    throw new ModApiError(503, {
+      title: "Bridge mock doesn't implement recruitUnits",
+      status: 503,
+      detail:
+        "Set MOD_API_URL to the running Andúril bridge (e.g. http://localhost:8080) " +
+        "and MOD_API_MOCK=0 to use this action.",
+    });
+  }
+  return await modPost<RecruitUnitsResponse>(
+    `/settlements/${settlementId}/recruitments`,
     req,
   );
 }

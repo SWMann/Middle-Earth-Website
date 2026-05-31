@@ -41,6 +41,9 @@ public class HttpApi {
     public static final String PORT_ENV = "ANDURIL_PORT";
     public static final String TOKEN_ENV = "ANDURIL_TOKEN";
 
+    /** Flat-cost recruitment model for Phase 4. Move to per-unit-type later. */
+    private static final int COIN_PER_UNIT = 10;
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final MinecraftServer server;
@@ -221,6 +224,169 @@ public class HttpApi {
             }
         });
 
+        // Protected: recruit units at a settlement. Templates from the
+        // grant endpoint but exercises the multi-row write shape every
+        // future Phase 5 player action will follow:
+        //   1. Lock the affected rows in deterministic order
+        //   2. Cross-table validation (does X exist, does Y satisfy Z)
+        //   3. Conditional insert-vs-update for the entity being added to
+        //   4. Decrement-from + add-to in the same transaction
+        //   5. Audit event with the full delta
+        app.post("/api/v1/settlements/{id}/recruitments", ctx -> {
+            long settlementId = parseLongOr400(ctx.pathParam("id"));
+            RecruitRequest req = ctx.bodyAsClass(RecruitRequest.class);
+            validateRecruit(req);
+
+            long coinCost = req.count() * (long) COIN_PER_UNIT;
+
+            try (Connection conn = database.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    // 1a. Lock the settlement.
+                    String factionId;
+                    int population;
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT faction_id, population FROM game.settlements " +
+                            "WHERE id = ? FOR UPDATE")) {
+                        select.setLong(1, settlementId);
+                        try (ResultSet rs = select.executeQuery()) {
+                            if (!rs.next()) {
+                                throw new NotFoundResponse("Settlement not found: " + settlementId);
+                            }
+                            factionId = rs.getString("faction_id");
+                            population = rs.getInt("population");
+                        }
+                    }
+
+                    // 1b. Lock the faction so concurrent grants/recruits serialise.
+                    long treasuryCoin;
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT treasury_coin FROM game.factions WHERE id = ? FOR UPDATE")) {
+                        select.setString(1, factionId);
+                        try (ResultSet rs = select.executeQuery()) {
+                            rs.next();
+                            treasuryCoin = rs.getLong("treasury_coin");
+                        }
+                    }
+
+                    // 2. Cross-table validation.
+                    if (treasuryCoin < coinCost) {
+                        throw new BadRequestResponse(String.format(
+                            "Insufficient Coin: need %d, have %d.", coinCost, treasuryCoin
+                        ));
+                    }
+                    int popInUse;
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT COALESCE(SUM(pop_cost), 0)::INT AS used " +
+                            "FROM game.districts WHERE settlement_id = ? AND active = 'true'")) {
+                        select.setLong(1, settlementId);
+                        try (ResultSet rs = select.executeQuery()) {
+                            rs.next();
+                            popInUse = rs.getInt("used");
+                        }
+                    }
+                    int popAvailable = population - popInUse;
+                    if (popAvailable < req.count()) {
+                        throw new BadRequestResponse(String.format(
+                            "Insufficient available population: need %d, have %d.",
+                            req.count(), popAvailable
+                        ));
+                    }
+
+                    // 3. Upsert the unit stack. We don't have a unique
+                    // constraint on (unit_type, faction_id, garrisoned_at)
+                    // so do this as select-then-update/insert under the
+                    // existing row locks.
+                    Long existingStackId = null;
+                    int existingCount = 0;
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT id, count FROM game.units " +
+                            "WHERE unit_type = ? AND faction_id = ? AND garrisoned_at = ? FOR UPDATE")) {
+                        select.setString(1, req.unitType());
+                        select.setString(2, factionId);
+                        select.setLong(3, settlementId);
+                        try (ResultSet rs = select.executeQuery()) {
+                            if (rs.next()) {
+                                existingStackId = rs.getLong("id");
+                                existingCount = rs.getInt("count");
+                            }
+                        }
+                    }
+                    int newStackCount;
+                    if (existingStackId != null) {
+                        newStackCount = existingCount + req.count();
+                        try (PreparedStatement update = conn.prepareStatement(
+                                "UPDATE game.units SET count = ? WHERE id = ?")) {
+                            update.setInt(1, newStackCount);
+                            update.setLong(2, existingStackId);
+                            update.executeUpdate();
+                        }
+                    } else {
+                        newStackCount = req.count();
+                        try (PreparedStatement insert = conn.prepareStatement(
+                                "INSERT INTO game.units " +
+                                "(unit_type, faction_id, count, garrisoned_at) VALUES (?, ?, ?, ?)")) {
+                            insert.setString(1, req.unitType());
+                            insert.setString(2, factionId);
+                            insert.setInt(3, req.count());
+                            insert.setLong(4, settlementId);
+                            insert.executeUpdate();
+                        }
+                    }
+
+                    // 4. Debit the treasury.
+                    long newCoin = treasuryCoin - coinCost;
+                    try (PreparedStatement update = conn.prepareStatement(
+                            "UPDATE game.factions SET treasury_coin = ? WHERE id = ?")) {
+                        update.setLong(1, newCoin);
+                        update.setString(2, factionId);
+                        update.executeUpdate();
+                    }
+
+                    // 5. Audit.
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("settlement_id", settlementId);
+                    payload.put("unit_type", req.unitType());
+                    payload.put("count", req.count());
+                    payload.put("coin_cost", coinCost);
+                    payload.put("new_stack_count", newStackCount);
+                    payload.put("new_coin_balance", newCoin);
+                    payload.put("reason", req.reason());
+
+                    long eventId;
+                    try (PreparedStatement insert = conn.prepareStatement(
+                            "INSERT INTO audit.events " +
+                            "(event_type, faction_id, visibility, payload, occurred_at) " +
+                            "VALUES (?, ?, ?, CAST(? AS jsonb), NOW()) RETURNING id")) {
+                        insert.setString(1, "UNITS_RECRUITED");
+                        insert.setString(2, factionId);
+                        insert.setString(3, "faction");
+                        insert.setString(4, JSON.writeValueAsString(payload));
+                        try (ResultSet rs = insert.executeQuery()) {
+                            rs.next();
+                            eventId = rs.getLong(1);
+                        }
+                    }
+
+                    conn.commit();
+                    Anduril.LOGGER.info(
+                        "UNITS_RECRUITED: {} {} at settlement #{} (faction {}, -{} coin, event {})",
+                        req.count(), req.unitType(), settlementId, factionId, coinCost, eventId
+                    );
+
+                    ctx.json(new RecruitResponse(
+                        settlementId, req.unitType(), newStackCount, newCoin, eventId
+                    ));
+                } catch (Exception e) {
+                    conn.rollback();
+                    throw e;
+                }
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("DB error during recruit: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
+        });
+
         // Protected: Postgres connectivity status. Useful for ops to confirm
         // the bridge has DB without needing to read server logs.
         app.get("/api/v1/admin/db-info", ctx -> {
@@ -253,6 +419,35 @@ public class HttpApi {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
+    private static long parseLongOr400(String s) {
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            throw new BadRequestResponse("Invalid id: " + s);
+        }
+    }
+
+    private static void validateRecruit(RecruitRequest req) {
+        if (req == null) {
+            throw new BadRequestResponse("Body required");
+        }
+        if (req.unitType() == null || req.unitType().isBlank()) {
+            throw new BadRequestResponse("unit_type is required");
+        }
+        // Cheap shape check so we don't write whatever the caller passed.
+        if (!req.unitType().matches("[a-z0-9_]{2,64}")) {
+            throw new BadRequestResponse(
+                "unit_type must match [a-z0-9_]{2,64} (e.g. 'citadel_guard')"
+            );
+        }
+        if (req.count() == null || req.count() <= 0 || req.count() > 1000) {
+            throw new BadRequestResponse("count must be 1..1000");
+        }
+        if (req.reason() == null || req.reason().isBlank()) {
+            throw new BadRequestResponse("reason is required");
+        }
+    }
+
     private static void validateGrant(GrantRequest req) {
         if (req == null) {
             throw new BadRequestResponse("Body required");
@@ -278,6 +473,18 @@ public class HttpApi {
         String displayName,
         long treasuryCoin,
         long treasuryDp,
+        long auditEventId
+    ) {}
+
+    /** Request body for POST /api/v1/settlements/{id}/recruitments. */
+    public record RecruitRequest(String unitType, Integer count, String reason) {}
+
+    /** Response body — the unit-stack count after the add, plus new treasury. */
+    public record RecruitResponse(
+        long settlementId,
+        String unitType,
+        int unitStackCount,
+        long treasuryCoin,
         long auditEventId
     ) {}
 }
