@@ -20,3 +20,20 @@ export const getRegionClaim = cache(async (regionId: string) => {
     .limit(1);
   return rows[0] ?? null;
 });
+
+export const getAllRegionsWithClaims = cache(async () => {
+  // LEFT JOIN so unclaimed regions still come back.
+  return await db
+    .select({
+      id: schema.regions.id,
+      displayName: schema.regions.displayName,
+      biome: schema.regions.biome,
+      claimedByFactionId: schema.regionClaims.factionId,
+    })
+    .from(schema.regions)
+    .leftJoin(
+      schema.regionClaims,
+      eq(schema.regions.id, schema.regionClaims.regionId),
+    )
+    .orderBy(schema.regions.id);
+});

@@ -44,6 +44,9 @@ public class HttpApi {
     /** Flat-cost recruitment model for Phase 4. Move to per-unit-type later. */
     private static final int COIN_PER_UNIT = 10;
 
+    /** Per mechanics_spec.md §6.4 — flat 240 DP per claim, regardless of value. */
+    private static final int DP_PER_REGION_CLAIM = 240;
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final MinecraftServer server;
@@ -387,6 +390,136 @@ public class HttpApi {
             }
         });
 
+        // Protected: claim a region for a faction.
+        //   Cost: 240 DP per mechanics_spec.md §6.4.
+        //   Requires: region exists, region currently unclaimed, faction
+        //   has enough DP.
+        //   Contiguity check is deferred to Phase 5 — needs region
+        //   adjacency data and the faction-trait exception ruleset.
+        app.post("/api/v1/claims", ctx -> {
+            ClaimRequest req = ctx.bodyAsClass(ClaimRequest.class);
+            validateClaim(req);
+
+            try (Connection conn = database.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    // 1a. Region must exist; lock for the rest of the tx.
+                    String regionDisplayName;
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT display_name FROM game.regions WHERE id = ? FOR UPDATE")) {
+                        select.setString(1, req.regionId());
+                        try (ResultSet rs = select.executeQuery()) {
+                            if (!rs.next()) {
+                                throw new NotFoundResponse("Region not found: " + req.regionId());
+                            }
+                            regionDisplayName = rs.getString("display_name");
+                        }
+                    }
+
+                    // 1b. Existing claim → 409. Cleaner than 400 because the
+                    // request itself was well-formed; the world's state
+                    // rejects it.
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT faction_id FROM game.region_claims WHERE region_id = ?")) {
+                        select.setString(1, req.regionId());
+                        try (ResultSet rs = select.executeQuery()) {
+                            if (rs.next()) {
+                                String byWhom = rs.getString("faction_id");
+                                ctx.status(409).result(
+                                    "Region " + req.regionId() + " already claimed by " + byWhom
+                                );
+                                return;
+                            }
+                        }
+                    }
+
+                    // 1c. Lock the faction.
+                    long treasuryDp;
+                    String factionDisplayName;
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT display_name, treasury_dp FROM game.factions " +
+                            "WHERE id = ? FOR UPDATE")) {
+                        select.setString(1, req.factionId());
+                        try (ResultSet rs = select.executeQuery()) {
+                            if (!rs.next()) {
+                                throw new NotFoundResponse("Faction not found: " + req.factionId());
+                            }
+                            factionDisplayName = rs.getString("display_name");
+                            treasuryDp = rs.getLong("treasury_dp");
+                        }
+                    }
+
+                    // 2. Cost gate.
+                    if (treasuryDp < DP_PER_REGION_CLAIM) {
+                        throw new BadRequestResponse(String.format(
+                            "Insufficient DP: need %d, have %d.", DP_PER_REGION_CLAIM, treasuryDp
+                        ));
+                    }
+
+                    // 3. Insert claim, debit DP.
+                    try (PreparedStatement insert = conn.prepareStatement(
+                            "INSERT INTO game.region_claims " +
+                            "(region_id, faction_id, claimed_at, claim_dp_cost) " +
+                            "VALUES (?, ?, NOW(), ?)")) {
+                        insert.setString(1, req.regionId());
+                        insert.setString(2, req.factionId());
+                        insert.setInt(3, DP_PER_REGION_CLAIM);
+                        insert.executeUpdate();
+                    }
+
+                    long newDp = treasuryDp - DP_PER_REGION_CLAIM;
+                    try (PreparedStatement update = conn.prepareStatement(
+                            "UPDATE game.factions SET treasury_dp = ? WHERE id = ?")) {
+                        update.setLong(1, newDp);
+                        update.setString(2, req.factionId());
+                        update.executeUpdate();
+                    }
+
+                    // 4. Audit. Visibility 'public' — claims are world-state
+                    // facts and belong in the public feed.
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("region_id", req.regionId());
+                    payload.put("region_name", regionDisplayName);
+                    payload.put("dp_cost", DP_PER_REGION_CLAIM);
+                    payload.put("new_dp_balance", newDp);
+                    payload.put("reason", req.reason());
+
+                    long eventId;
+                    try (PreparedStatement insert = conn.prepareStatement(
+                            "INSERT INTO audit.events " +
+                            "(event_type, faction_id, visibility, payload, occurred_at) " +
+                            "VALUES (?, ?, ?, CAST(? AS jsonb), NOW()) RETURNING id")) {
+                        insert.setString(1, "REGION_CLAIMED");
+                        insert.setString(2, req.factionId());
+                        insert.setString(3, "public");
+                        insert.setString(4, JSON.writeValueAsString(payload));
+                        try (ResultSet rs = insert.executeQuery()) {
+                            rs.next();
+                            eventId = rs.getLong(1);
+                        }
+                    }
+
+                    conn.commit();
+                    Anduril.LOGGER.info(
+                        "REGION_CLAIMED: {} → {} (-{} DP, event {})",
+                        req.regionId(), req.factionId(), DP_PER_REGION_CLAIM, eventId
+                    );
+
+                    ctx.json(new ClaimResponse(
+                        req.regionId(), regionDisplayName,
+                        req.factionId(), factionDisplayName,
+                        newDp, eventId
+                    ));
+                } catch (Exception e) {
+                    conn.rollback();
+                    throw e;
+                }
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("DB error during claim: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
+        });
+
         // Protected: Postgres connectivity status. Useful for ops to confirm
         // the bridge has DB without needing to read server logs.
         app.get("/api/v1/admin/db-info", ctx -> {
@@ -424,6 +557,27 @@ public class HttpApi {
             return Long.parseLong(s);
         } catch (NumberFormatException e) {
             throw new BadRequestResponse("Invalid id: " + s);
+        }
+    }
+
+    private static void validateClaim(ClaimRequest req) {
+        if (req == null) throw new BadRequestResponse("Body required");
+        if (req.regionId() == null || req.regionId().isBlank()) {
+            throw new BadRequestResponse("regionId is required");
+        }
+        // Region IDs are short alphanumeric codes like 'AR43'. Tighten if
+        // we add other forms later.
+        if (!req.regionId().matches("[A-Za-z0-9_-]{2,16}")) {
+            throw new BadRequestResponse("regionId must match [A-Za-z0-9_-]{2,16}");
+        }
+        if (req.factionId() == null || req.factionId().isBlank()) {
+            throw new BadRequestResponse("factionId is required");
+        }
+        if (!req.factionId().matches("[a-z0-9_]{2,32}")) {
+            throw new BadRequestResponse("factionId must match [a-z0-9_]{2,32}");
+        }
+        if (req.reason() == null || req.reason().isBlank()) {
+            throw new BadRequestResponse("reason is required");
         }
     }
 
@@ -472,6 +626,19 @@ public class HttpApi {
         String id,
         String displayName,
         long treasuryCoin,
+        long treasuryDp,
+        long auditEventId
+    ) {}
+
+    /** Request body for POST /api/v1/claims. */
+    public record ClaimRequest(String regionId, String factionId, String reason) {}
+
+    /** Response body — what got claimed, by whom, and the new DP balance. */
+    public record ClaimResponse(
+        String regionId,
+        String regionDisplayName,
+        String factionId,
+        String factionDisplayName,
         long treasuryDp,
         long auditEventId
     ) {}

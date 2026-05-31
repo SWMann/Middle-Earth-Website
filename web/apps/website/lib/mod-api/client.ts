@@ -18,6 +18,8 @@ import type {
   GrantTreasuryResponse,
   RecruitUnitsRequest,
   RecruitUnitsResponse,
+  ClaimRegionRequest,
+  ClaimRegionResponse,
 } from "@modspec/api-types";
 import { MockModApiError, mockRedeemLinkCode } from "./mock";
 
@@ -101,6 +103,24 @@ export async function recruitUnits(
     `/settlements/${settlementId}/recruitments`,
     req,
   );
+}
+
+/**
+ * Claim a region for a faction. Charges 240 DP per mechanics_spec.md §6.4.
+ * Always goes through the real bridge.
+ */
+export async function claimRegion(
+  req: ClaimRegionRequest,
+): Promise<ClaimRegionResponse> {
+  if (shouldMock()) {
+    throw new ModApiError(503, {
+      title: "Bridge mock doesn't implement claimRegion",
+      status: 503,
+      detail:
+        "Set MOD_API_URL to the running Andúril bridge and MOD_API_MOCK=0 to use this action.",
+    });
+  }
+  return await modPost<ClaimRegionResponse>(`/claims`, req);
 }
 
 async function modPost<T>(path: string, body: unknown): Promise<T> {
