@@ -1,12 +1,21 @@
 package org.middleearth.anduril;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
+import io.javalin.http.BadRequestResponse;
+import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.MinecraftServer;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Embedded HTTP API for the Andúril bridge mod.
@@ -31,6 +40,8 @@ public class HttpApi {
     public static final int DEFAULT_PORT = 8080;
     public static final String PORT_ENV = "ANDURIL_PORT";
     public static final String TOKEN_ENV = "ANDURIL_TOKEN";
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final MinecraftServer server;
     private final Database database;
@@ -123,6 +134,93 @@ public class HttpApi {
             ctx.contentType("application/json").result(body);
         });
 
+        // Protected: admin grant of coin or DP to a faction. The first
+        // real mutating endpoint — every later write follows this shape:
+        //   1. Parse + validate (auth gate already cleared by .before)
+        //   2. Open a DB transaction
+        //   3. UPDATE game.* + INSERT audit.events in the same tx
+        //   4. Commit, return the new state
+        app.post("/api/v1/admin/factions/{id}/grant", ctx -> {
+            String factionId = ctx.pathParam("id");
+            GrantRequest req = ctx.bodyAsClass(GrantRequest.class);
+            validateGrant(req);
+
+            try (Connection conn = database.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    // Lock the row so concurrent grants serialise.
+                    long newCoin, newDp;
+                    String displayName;
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT display_name, treasury_coin, treasury_dp " +
+                            "FROM game.factions WHERE id = ? FOR UPDATE")) {
+                        select.setString(1, factionId);
+                        try (ResultSet rs = select.executeQuery()) {
+                            if (!rs.next()) {
+                                throw new NotFoundResponse("Faction not found: " + factionId);
+                            }
+                            displayName = rs.getString("display_name");
+                            newCoin = rs.getLong("treasury_coin");
+                            newDp = rs.getLong("treasury_dp");
+                        }
+                    }
+
+                    if ("coin".equalsIgnoreCase(req.currency())) {
+                        newCoin += req.amount();
+                    } else {
+                        newDp += req.amount();
+                    }
+
+                    try (PreparedStatement update = conn.prepareStatement(
+                            "UPDATE game.factions SET treasury_coin = ?, treasury_dp = ? WHERE id = ?")) {
+                        update.setLong(1, newCoin);
+                        update.setLong(2, newDp);
+                        update.setString(3, factionId);
+                        update.executeUpdate();
+                    }
+
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("currency", req.currency().toLowerCase());
+                    payload.put("amount", req.amount());
+                    payload.put("reason", req.reason());
+                    payload.put("new_coin_balance", newCoin);
+                    payload.put("new_dp_balance", newDp);
+                    String payloadJson = JSON.writeValueAsString(payload);
+
+                    long eventId;
+                    try (PreparedStatement insert = conn.prepareStatement(
+                            "INSERT INTO audit.events " +
+                            "(event_type, faction_id, visibility, payload, occurred_at) " +
+                            "VALUES (?, ?, ?, CAST(? AS jsonb), NOW()) RETURNING id")) {
+                        insert.setString(1, "ADMIN_GRANT");
+                        insert.setString(2, factionId);
+                        insert.setString(3, "admin");
+                        insert.setString(4, payloadJson);
+                        try (ResultSet rs = insert.executeQuery()) {
+                            rs.next();
+                            eventId = rs.getLong(1);
+                        }
+                    }
+
+                    conn.commit();
+                    Anduril.LOGGER.info(
+                        "ADMIN_GRANT: {} {} {} → {} (event {})",
+                        req.currency(), req.amount(), factionId, req.reason(), eventId
+                    );
+
+                    ctx.json(new GrantResponse(
+                        factionId, displayName, newCoin, newDp, eventId
+                    ));
+                } catch (Exception e) {
+                    conn.rollback();
+                    throw e;
+                }
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("DB error during grant: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
+        });
+
         // Protected: Postgres connectivity status. Useful for ops to confirm
         // the bridge has DB without needing to read server logs.
         app.get("/api/v1/admin/db-info", ctx -> {
@@ -154,4 +252,32 @@ public class HttpApi {
     private static String escape(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
+
+    private static void validateGrant(GrantRequest req) {
+        if (req == null) {
+            throw new BadRequestResponse("Body required");
+        }
+        if (req.currency() == null
+            || (!"coin".equalsIgnoreCase(req.currency()) && !"dp".equalsIgnoreCase(req.currency()))) {
+            throw new BadRequestResponse("currency must be 'coin' or 'dp'");
+        }
+        if (req.amount() == null || req.amount() <= 0) {
+            throw new BadRequestResponse("amount must be a positive integer");
+        }
+        if (req.reason() == null || req.reason().isBlank()) {
+            throw new BadRequestResponse("reason is required");
+        }
+    }
+
+    /** Request body for POST /api/v1/admin/factions/{id}/grant. */
+    public record GrantRequest(String currency, Long amount, String reason) {}
+
+    /** Response body — the updated faction state plus the audit row id. */
+    public record GrantResponse(
+        String id,
+        String displayName,
+        long treasuryCoin,
+        long treasuryDp,
+        long auditEventId
+    ) {}
 }
