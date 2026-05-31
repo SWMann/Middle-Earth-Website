@@ -28,6 +28,18 @@ function shouldMock(): boolean {
   return !process.env.MOD_API_URL;
 }
 
+/**
+ * Build a diagnostic string describing why we'd route to the mock.
+ * Surfaced in the 503 response body so dev/ops know exactly which env
+ * var is the problem. Never includes the token value.
+ */
+function mockDiagnostic(): string {
+  const mock = process.env.MOD_API_MOCK ?? "(unset)";
+  const url = process.env.MOD_API_URL ? "(set)" : "(unset)";
+  const token = process.env.MOD_API_TOKEN ? "(set)" : "(unset)";
+  return `MOD_API_MOCK=${mock}, MOD_API_URL=${url}, MOD_API_TOKEN=${token}`;
+}
+
 export class ModApiError extends Error {
   constructor(
     public readonly status: number,
@@ -71,8 +83,8 @@ export async function grantTreasury(
       title: "Bridge mock doesn't implement grantTreasury",
       status: 503,
       detail:
-        "Set MOD_API_URL to the running Andúril bridge (e.g. http://localhost:8080) " +
-        "and MOD_API_MOCK=0 to use this action.",
+        "Set MOD_API_URL to the running Andúril bridge and MOD_API_MOCK=0 to use this action. " +
+        `Current env: ${mockDiagnostic()}`,
     });
   }
   return await modPost<GrantTreasuryResponse>(
@@ -95,8 +107,8 @@ export async function recruitUnits(
       title: "Bridge mock doesn't implement recruitUnits",
       status: 503,
       detail:
-        "Set MOD_API_URL to the running Andúril bridge (e.g. http://localhost:8080) " +
-        "and MOD_API_MOCK=0 to use this action.",
+        "Set MOD_API_URL to the running Andúril bridge and MOD_API_MOCK=0 to use this action. " +
+        `Current env: ${mockDiagnostic()}`,
     });
   }
   return await modPost<RecruitUnitsResponse>(
