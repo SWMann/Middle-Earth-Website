@@ -20,19 +20,43 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    // Javalin embedded HTTP server for the bridge's API. Bundled into the
-    // mod jar via Loom's JIJ so the server's mods/ folder doesn't need
-    // any extra libraries dropped alongside us.
+    // Loom's `include` JIJ does NOT pull transitives, so every runtime dep
+    // has to be listed explicitly. Minecraft provides org.slf4j:slf4j-api at
+    // runtime, so we skip it. If the deployed jar throws NoClassDefFoundError
+    // for a new class, look up what jar it lives in and add it here.
+
+    // Javalin (HTTP) + its Jetty 11 stack + Kotlin stdlib.
     include(implementation('io.javalin:javalin:6.3.0'))
+    include(implementation('org.eclipse.jetty:jetty-server:11.0.23'))
+    include(implementation('org.eclipse.jetty:jetty-http:11.0.23'))
+    include(implementation('org.eclipse.jetty:jetty-io:11.0.23'))
+    include(implementation('org.eclipse.jetty:jetty-util:11.0.23'))
+    include(implementation('org.eclipse.jetty:jetty-servlet:11.0.23'))
+    include(implementation('org.eclipse.jetty:jetty-security:11.0.23'))
+    include(implementation('org.eclipse.jetty:jetty-webapp:11.0.23'))
+    include(implementation('org.eclipse.jetty:jetty-xml:11.0.23'))
+    include(implementation('org.eclipse.jetty.toolchain:jetty-jakarta-servlet-api:5.0.2'))
+    include(implementation('org.eclipse.jetty.websocket:websocket-jetty-server:11.0.23'))
+    include(implementation('org.eclipse.jetty.websocket:websocket-jetty-api:11.0.23'))
+    include(implementation('org.eclipse.jetty.websocket:websocket-jetty-common:11.0.23'))
+    include(implementation('org.eclipse.jetty.websocket:websocket-core-common:11.0.23'))
+    include(implementation('org.eclipse.jetty.websocket:websocket-core-server:11.0.23'))
+    include(implementation('org.eclipse.jetty.websocket:websocket-servlet:11.0.23'))
+    include(implementation('org.jetbrains.kotlin:kotlin-stdlib:1.9.25'))
+    include(implementation('org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.25'))
+    include(implementation('org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.25'))
+    include(implementation('org.jetbrains:annotations:13.0'))
 
     // Postgres connection. pgjdbc 42.7.x supports channel_binding=require
-    // which Neon enforces for SCRAM-SHA-256-PLUS. HikariCP wraps it with a
-    // connection pool.
+    // which Neon enforces for SCRAM-SHA-256-PLUS. HikariCP wraps it in a pool.
     include(implementation('com.zaxxer:HikariCP:5.1.0'))
     include(implementation('org.postgresql:postgresql:42.7.5'))
+    include(implementation('org.checkerframework:checker-qual:3.48.3'))
 
     // Jackson — Javalin auto-detects it on the classpath for ctx.bodyAsClass
-    // and ctx.json. Required from the first mutating endpoint onward.
+    // and ctx.json. jackson-databind depends on the other two.
+    include(implementation('com.fasterxml.jackson.core:jackson-core:2.18.2'))
+    include(implementation('com.fasterxml.jackson.core:jackson-annotations:2.18.2'))
     include(implementation('com.fasterxml.jackson.core:jackson-databind:2.18.2'))
 }
 
