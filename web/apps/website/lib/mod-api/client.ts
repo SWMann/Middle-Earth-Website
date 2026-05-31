@@ -14,6 +14,8 @@ import type {
   ProblemDetails,
   RedeemLinkCodeRequest,
   RedeemLinkCodeResponse,
+  GrantTreasuryRequest,
+  GrantTreasuryResponse,
 } from "@modspec/api-types";
 import { MockModApiError, mockRedeemLinkCode } from "./mock";
 
@@ -49,6 +51,30 @@ export async function redeemLinkCode(
     }
   }
   return await modPost<RedeemLinkCodeResponse>("/mc-links/redeem", req);
+}
+
+/**
+ * Admin grant of Coin or DP to a faction. Always goes through the real
+ * bridge — the mock doesn't implement this because the point of the
+ * action is exercising the cross-process write path.
+ */
+export async function grantTreasury(
+  factionId: string,
+  req: GrantTreasuryRequest,
+): Promise<GrantTreasuryResponse> {
+  if (shouldMock()) {
+    throw new ModApiError(503, {
+      title: "Bridge mock doesn't implement grantTreasury",
+      status: 503,
+      detail:
+        "Set MOD_API_URL to the running Andúril bridge (e.g. http://localhost:8080) " +
+        "and MOD_API_MOCK=0 to use this action.",
+    });
+  }
+  return await modPost<GrantTreasuryResponse>(
+    `/admin/factions/${encodeURIComponent(factionId)}/grant`,
+    req,
+  );
 }
 
 async function modPost<T>(path: string, body: unknown): Promise<T> {

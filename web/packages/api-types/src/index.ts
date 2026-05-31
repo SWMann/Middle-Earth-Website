@@ -11,3 +11,4 @@
 
 export * from "./mc-links";
 export * from "./common";
+export * from "./factions";
