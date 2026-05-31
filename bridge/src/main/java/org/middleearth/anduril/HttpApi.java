@@ -33,12 +33,14 @@ public class HttpApi {
     public static final String TOKEN_ENV = "ANDURIL_TOKEN";
 
     private final MinecraftServer server;
+    private final Database database;
     private final byte[] expectedToken; // empty array if not configured
     private final boolean tokenConfigured;
     private Javalin app;
 
-    public HttpApi(MinecraftServer server) {
+    public HttpApi(MinecraftServer server, Database database) {
         this.server = server;
+        this.database = database;
         String fromEnv = System.getenv(TOKEN_ENV);
         if (fromEnv == null || fromEnv.isBlank()) {
             this.expectedToken = new byte[0];
@@ -117,6 +119,20 @@ public class HttpApi {
                 "{\"mod\":\"anduril\",\"version\":\"%s\",\"mc_version\":\"%s\",\"auth\":\"ok\"}",
                 escape(Anduril.MOD_VERSION),
                 escape(SharedConstants.getGameVersion().getName())
+            );
+            ctx.contentType("application/json").result(body);
+        });
+
+        // Protected: Postgres connectivity status. Useful for ops to confirm
+        // the bridge has DB without needing to read server logs.
+        app.get("/api/v1/admin/db-info", ctx -> {
+            var pool = database.poolStats();
+            String body = String.format(
+                "{\"postgres_version\":\"%s\",\"pool\":{\"active\":%d,\"idle\":%d,\"total\":%d,\"max\":8}}",
+                escape(database.postgresVersion()),
+                pool.getActiveConnections(),
+                pool.getIdleConnections(),
+                pool.getTotalConnections()
             );
             ctx.contentType("application/json").result(body);
         });

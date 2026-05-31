@@ -24,6 +24,12 @@ dependencies {
     // mod jar via Loom's JIJ so the server's mods/ folder doesn't need
     // any extra libraries dropped alongside us.
     include(implementation('io.javalin:javalin:6.3.0'))
+
+    // Postgres connection. pgjdbc 42.7.x supports channel_binding=require
+    // which Neon enforces for SCRAM-SHA-256-PLUS. HikariCP wraps it with a
+    // connection pool.
+    include(implementation('com.zaxxer:HikariCP:5.1.0'))
+    include(implementation('org.postgresql:postgresql:42.7.5'))
 }
 
 processResources {
