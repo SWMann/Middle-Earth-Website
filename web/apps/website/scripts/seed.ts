@@ -21,7 +21,18 @@ import { sql as sqlOp } from "drizzle-orm";
 import * as web from "../lib/db/schema/web.ts";
 import * as game from "../lib/db/schema/game.ts";
 import * as audit from "../lib/db/schema/audit.ts";
-const schema = { ...web, ...game, ...audit };
+import * as configSchema from "../lib/db/schema/config.ts";
+import {
+  tagsCatalogue,
+  resourcesCatalogue,
+  resourceTagMappings,
+  districtTypesCatalogue,
+  districtConsumesCatalogue,
+  districtProducesCatalogue,
+  unitTypesCatalogue,
+  unitRecruitmentCostCatalogue,
+} from "./catalogue-seed.ts";
+const schema = { ...web, ...game, ...audit, ...configSchema };
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -531,6 +542,92 @@ async function main() {
       });
   }
 
+  console.log("Seeding config catalogue (tags, resources, district types, unit types)…");
+  // Insert order matters because of FKs: tags & resources first, then their
+  // M:N mapping, then district types + their consumes/produces, finally
+  // unit types + recruitment costs.
+
+  for (const t of tagsCatalogue) {
+    await db
+      .insert(schema.tags)
+      .values(t)
+      .onConflictDoUpdate({ target: schema.tags.id, set: { displayName: t.displayName, description: t.description } });
+  }
+
+  for (const r of resourcesCatalogue) {
+    await db
+      .insert(schema.resources)
+      .values(r)
+      .onConflictDoUpdate({
+        target: schema.resources.id,
+        set: { displayName: r.displayName, description: r.description, foodValue: r.foodValue },
+      });
+  }
+
+  // Wipe and re-insert the M:N mapping — cleaner than figuring out which
+  // specific rows changed when the catalogue is small.
+  await db.execute(sqlOp`DELETE FROM config.resource_tags`);
+  for (const rt of resourceTagMappings) {
+    await db.insert(schema.resourceTags).values(rt);
+  }
+
+  for (const d of districtTypesCatalogue) {
+    await db
+      .insert(schema.districtTypes)
+      .values(d)
+      .onConflictDoUpdate({
+        target: schema.districtTypes.id,
+        set: {
+          displayName: d.displayName,
+          category: d.category,
+          tierMin: d.tierMin,
+          popCost: d.popCost,
+          populationCapProvided: d.populationCapProvided ?? 0,
+          description: d.description,
+        },
+      });
+  }
+
+  await db.execute(sqlOp`DELETE FROM config.district_consumes`);
+  for (const dc of districtConsumesCatalogue) {
+    await db.insert(schema.districtConsumes).values(dc);
+  }
+
+  await db.execute(sqlOp`DELETE FROM config.district_produces`);
+  for (const dp of districtProducesCatalogue) {
+    await db.insert(schema.districtProduces).values(dp);
+  }
+
+  for (const u of unitTypesCatalogue) {
+    await db
+      .insert(schema.unitTypes)
+      .values(u)
+      .onConflictDoUpdate({
+        target: schema.unitTypes.id,
+        set: {
+          displayName: u.displayName,
+          factionId: u.factionId,
+          category: u.category,
+          tierRequired: u.tierRequired,
+          recruitmentTimeDays: u.recruitmentTimeDays,
+          popCost: u.popCost,
+          coinCost: u.coinCost,
+          upkeepFoodDaily: u.upkeepFoodDaily,
+          upkeepCoinDaily: u.upkeepCoinDaily,
+          health: u.health,
+          armor: u.armor,
+          morale: u.morale,
+          speed: u.speed,
+          description: u.description,
+        },
+      });
+  }
+
+  await db.execute(sqlOp`DELETE FROM config.unit_recruitment_cost`);
+  for (const urc of unitRecruitmentCostCatalogue) {
+    await db.insert(schema.unitRecruitmentCost).values(urc);
+  }
+
   console.log("Seeding regions and claims…");
   for (const r of regions) {
     await db
@@ -571,6 +668,9 @@ async function main() {
   // Settlements are autonumber; idempotency is name+region uniqueness, which
   // we don't have a constraint for. Strategy: delete-and-reinsert keyed on
   // (name, regionId). Simpler than tracking IDs across runs at this scale.
+  // Delete child rows first to satisfy FKs.
+  await db.execute(sqlOp`DELETE FROM game.units WHERE garrisoned_at IS NOT NULL`);
+  await db.execute(sqlOp`DELETE FROM game.districts`);
   await db.execute(sqlOp`DELETE FROM game.settlements`);
   for (const s of settlements) {
     await db.insert(schema.settlements).values({

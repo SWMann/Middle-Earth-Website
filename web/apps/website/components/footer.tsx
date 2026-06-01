@@ -3,9 +3,14 @@ import Link from "next/link";
 export function Footer() {
   return (
     <footer className="mt-16 border-t border-black/10 dark:border-white/10">
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-6 text-xs opacity-70 sm:flex-row sm:items-center sm:justify-between">
-        <span>Middle-earth modded server</span>
-        <nav className="flex gap-4">
+      <div className="mx-auto max-w-6xl px-6 py-6 text-xs opacity-70 space-y-3">
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+          <span className="font-medium">Middle-earth modded server</span>
+          <span className="italic ml-auto">
+            Canon is a starting point, not a cage.
+          </span>
+        </div>
+        <nav className="flex flex-wrap gap-x-4 gap-y-2">
           <Link href={{ pathname: "/about" }} className="hover:underline">
             About
           </Link>
@@ -18,8 +23,19 @@ export function Footer() {
           <Link href={{ pathname: "/recruit" }} className="hover:underline">
             Recruit
           </Link>
+          <span aria-hidden className="opacity-30">
+            ·
+          </span>
+          <Link href={{ pathname: "/resources" }} className="hover:underline">
+            Resources
+          </Link>
+          <Link href={{ pathname: "/districts" }} className="hover:underline">
+            Districts
+          </Link>
+          <Link href={{ pathname: "/units" }} className="hover:underline">
+            Units
+          </Link>
         </nav>
-        <span className="italic">Canon is a starting point, not a cage.</span>
       </div>
     </footer>
   );

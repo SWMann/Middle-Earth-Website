@@ -14,3 +14,4 @@
 export * from "./web";
 export * from "./game";
 export * from "./audit";
+export * from "./config";
