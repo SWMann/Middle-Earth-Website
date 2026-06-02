@@ -485,6 +485,128 @@ export const unitRecruitmentCost = config.table(
   }),
 );
 
+// --- Unit attacks (weapons) ----------------------------------------------
+
+/**
+ * A unit's weapons. Replaces the attacks blob that used to live in
+ * unit_types.metadata. A unit may have several (a Citadel Guard fights
+ * with a longsword AND a brace of throwing spears). Ranged attacks carry
+ * an ammo count and a range in blocks; melee attacks leave both null.
+ */
+export const unitAttacks = config.table("unit_attacks", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  unitTypeId: text("unit_type_id")
+    .notNull()
+    .references(() => unitTypes.id),
+  weaponName: text("weapon_name").notNull(),
+  damage: integer("damage").notNull(),
+  rangeType: text("range_type").notNull(), // 'melee' | 'ranged'
+  rangeBlocks: integer("range_blocks"), // null for melee
+  ammo: integer("ammo"), // null for melee / unlimited
+});
+
+// --- Unit rank ladder (veterancy) ----------------------------------------
+
+/**
+ * The global veterancy ladder. Any surviving unit climbs it by fighting
+ * battles. Stat multipliers are applied to the unit's base health/damage;
+ * the morale bonus is additive. game.units (later) tracks each stack's
+ * current rank + accumulated battle experience.
+ */
+export const unitRanks = config.table("unit_ranks", {
+  rankKey: text("rank_key").primaryKey(), // 'green' | 'regular' | 'veteran' | 'elite'
+  displayName: text("display_name").notNull(),
+  level: integer("level").notNull(),
+  /** Battles survived to reach this rank. */
+  xpRequired: integer("xp_required").notNull(),
+  healthMultPct: integer("health_mult_pct").notNull().default(100),
+  damageMultPct: integer("damage_mult_pct").notNull().default(100),
+  moraleBonus: integer("morale_bonus").notNull().default(0),
+  description: text("description").notNull().default(""),
+});
+
+// --- Unit counter system -------------------------------------------------
+
+/**
+ * Rock-paper-scissors by category. "When an {attacker_category} fights a
+ * {defender_category}, apply modifier_pct to its damage." Positive = good
+ * matchup. Finer counters (a specific spearman vs cavalry) are done with
+ * combat traits below.
+ */
+export const unitCounters = config.table(
+  "unit_counters",
+  {
+    attackerCategory: text("attacker_category").notNull(),
+    defenderCategory: text("defender_category").notNull(),
+    modifierPct: integer("modifier_pct").notNull(),
+    note: text("note").notNull().default(""),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.attackerCategory, t.defenderCategory] }),
+  }),
+);
+
+// --- Unit terrain modifiers ----------------------------------------------
+
+/**
+ * How a category performs on a given biome. Cavalry is crippled in forest,
+ * dominant on plains. Combat traits (forest_stalker) can cancel a penalty.
+ */
+export const unitTerrainModifiers = config.table(
+  "unit_terrain_modifiers",
+  {
+    category: text("category").notNull(),
+    biome: text("biome").notNull(),
+    modifierPct: integer("modifier_pct").notNull(),
+    note: text("note").notNull().default(""),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.category, t.biome] }),
+  }),
+);
+
+// --- Combat traits + unit assignments ------------------------------------
+
+/**
+ * The extensibility workhorse for units (mirrors district_effects).
+ * effect jsonb describes what the trait does; the mod applies it in
+ * battle resolution. Open enum — add traits freely.
+ */
+export const combatTraits = config.table("combat_traits", {
+  id: text("id").primaryKey(), // 'anti_cavalry', 'fear', 'forest_stalker', ...
+  displayName: text("display_name").notNull(),
+  description: text("description").notNull().default(""),
+  effect: jsonb("effect").$type<Record<string, unknown>>().notNull().default({}),
+});
+
+export const unitTraits = config.table(
+  "unit_traits",
+  {
+    unitTypeId: text("unit_type_id")
+      .notNull()
+      .references(() => unitTypes.id),
+    traitId: text("trait_id")
+      .notNull()
+      .references(() => combatTraits.id),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.unitTypeId, t.traitId] }),
+  }),
+);
+
+// --- Unit abilities (active battle moves) --------------------------------
+
+export const unitAbilities = config.table("unit_abilities", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  unitTypeId: text("unit_type_id")
+    .notNull()
+    .references(() => unitTypes.id),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  cooldownTurns: integer("cooldown_turns").notNull().default(0),
+  effect: jsonb("effect").$type<Record<string, unknown>>().notNull().default({}),
+});
+
 // --- Occupation classes --------------------------------------------------
 
 /**
@@ -512,3 +634,7 @@ export type UnitType = typeof unitTypes.$inferSelect;
 export type OccupationClass = typeof occupationClasses.$inferSelect;
 export type DistrictEffect = typeof districtEffects.$inferSelect;
 export type FactionDistrictRule = typeof factionDistrictRules.$inferSelect;
+export type UnitAttack = typeof unitAttacks.$inferSelect;
+export type UnitRank = typeof unitRanks.$inferSelect;
+export type CombatTrait = typeof combatTraits.$inferSelect;
+export type UnitAbility = typeof unitAbilities.$inferSelect;

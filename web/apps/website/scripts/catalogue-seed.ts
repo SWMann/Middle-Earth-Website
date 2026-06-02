@@ -670,3 +670,81 @@ export const unitRecruitmentCostCatalogue = [
   { unitTypeId: "galadhrim_warden", resourceId: "R:Wool", amount: 1 },
   { unitTypeId: "uruk_hai", resourceId: "R:Iron_Ingot", amount: 1 },
 ];
+
+// --- Unit attacks (weapons) ----------------------------------------------
+
+export const unitAttacksCatalogue = [
+  { unitTypeId: "levy_spearman", weaponName: "Spear", damage: 5, rangeType: "melee", rangeBlocks: null, ammo: null },
+  { unitTypeId: "town_watch", weaponName: "Sword", damage: 6, rangeType: "melee", rangeBlocks: null, ammo: null },
+  { unitTypeId: "citadel_guard", weaponName: "Longsword", damage: 9, rangeType: "melee", rangeBlocks: null, ammo: null },
+  { unitTypeId: "citadel_guard", weaponName: "Throwing Spear", damage: 5, rangeType: "ranged", rangeBlocks: 8, ammo: 2 },
+  { unitTypeId: "rohirrim", weaponName: "Lance", damage: 8, rangeType: "melee", rangeBlocks: null, ammo: null },
+  { unitTypeId: "rohirrim", weaponName: "Sword", damage: 5, rangeType: "melee", rangeBlocks: null, ammo: null },
+  { unitTypeId: "galadhrim_warden", weaponName: "Galadhrim Longbow", damage: 7, rangeType: "ranged", rangeBlocks: 12, ammo: 20 },
+  { unitTypeId: "galadhrim_warden", weaponName: "Elven Knife", damage: 4, rangeType: "melee", rangeBlocks: null, ammo: null },
+  { unitTypeId: "uruk_hai", weaponName: "Scimitar", damage: 7, rangeType: "melee", rangeBlocks: null, ammo: null },
+  { unitTypeId: "uruk_hai", weaponName: "Crossbow", damage: 6, rangeType: "ranged", rangeBlocks: 10, ammo: 5 },
+];
+
+// --- Veterancy rank ladder (global) --------------------------------------
+
+export const unitRanksCatalogue = [
+  { rankKey: "green", displayName: "Green", level: 0, xpRequired: 0, healthMultPct: 90, damageMultPct: 90, moraleBonus: -10, description: "Raw recruits. Fight worse than the books say and break sooner." },
+  { rankKey: "regular", displayName: "Regular", level: 1, xpRequired: 1, healthMultPct: 100, damageMultPct: 100, moraleBonus: 0, description: "Blooded once. The baseline the stat-block describes." },
+  { rankKey: "veteran", displayName: "Veteran", level: 2, xpRequired: 3, healthMultPct: 115, damageMultPct: 110, moraleBonus: 10, description: "Survivors of several fights. Tougher, steadier, hit harder." },
+  { rankKey: "elite", displayName: "Elite", level: 3, xpRequired: 6, healthMultPct: 130, damageMultPct: 125, moraleBonus: 20, description: "Legends in the making. A single elite stack can decide a battle." },
+];
+
+// --- Counter system (category matchups) ----------------------------------
+
+export const unitCountersCatalogue = [
+  { attackerCategory: "T:Cavalry", defenderCategory: "T:Archer", modifierPct: 60, note: "Riders ride down bowmen before the third volley." },
+  { attackerCategory: "T:Cavalry", defenderCategory: "T:Warrior", modifierPct: -20, note: "Braced infantry blunt a charge." },
+  { attackerCategory: "T:Archer", defenderCategory: "T:Warrior", modifierPct: 25, note: "Whittle them down at range before they close." },
+  { attackerCategory: "T:Archer", defenderCategory: "T:Cavalry", modifierPct: -30, note: "Cavalry close the distance too fast." },
+  { attackerCategory: "T:Warrior", defenderCategory: "T:Archer", modifierPct: 20, note: "Close in and butcher the lightly-armoured." },
+];
+
+// --- Terrain modifiers ---------------------------------------------------
+
+export const unitTerrainModifiersCatalogue = [
+  { category: "T:Cavalry", biome: "plain", modifierPct: 20, note: "Open ground for the charge." },
+  { category: "T:Cavalry", biome: "forest", modifierPct: -40, note: "No room to charge among the trees." },
+  { category: "T:Cavalry", biome: "mountain", modifierPct: -30, note: "Broken ground founders horses." },
+  { category: "T:Archer", biome: "forest", modifierPct: 15, note: "Cover and ambush." },
+  { category: "T:Warrior", biome: "mountain", modifierPct: 10, note: "Defensible high ground." },
+];
+
+// --- Combat traits + assignments -----------------------------------------
+
+export const combatTraitsCatalogue = [
+  { id: "anti_cavalry", displayName: "Anti-Cavalry", description: "Set spears: deadly to anything that charges.", effect: { vs_category: "T:Cavalry", damage_pct: 50 } },
+  { id: "fear", displayName: "Fear", description: "The mere sight breaks lesser nerves.", effect: { enemy_morale_penalty: 15, radius_blocks: 10 } },
+  { id: "forest_stalker", displayName: "Forest Stalker", description: "At home beneath the trees — no woodland penalty, and unseen until they strike.", effect: { ignore_terrain_penalty: "forest", stealth: true } },
+  { id: "shieldwall", displayName: "Shield Wall", description: "Locked shields when they hold the line.", effect: { armor_bonus: 3, requires: "stationary" } },
+  { id: "relentless", displayName: "Relentless", description: "Marches by day and by night without rest.", effect: { ignore_fatigue: true, march_bonus_pct: 25 } },
+  { id: "tireless", displayName: "Tireless", description: "Elven endurance — never wearies on the long road.", effect: { ignore_fatigue: true } },
+  { id: "charge", displayName: "Charge", description: "Devastating on the turn they close the distance.", effect: { charge_damage_pct: 100 } },
+  { id: "volley", displayName: "Volley", description: "Looses massed arrows over the heads of the front line.", effect: { area_fire: true } },
+];
+
+export const unitTraitsCatalogue = [
+  { unitTypeId: "levy_spearman", traitId: "anti_cavalry" },
+  { unitTypeId: "citadel_guard", traitId: "shieldwall" },
+  { unitTypeId: "citadel_guard", traitId: "fear" },
+  { unitTypeId: "rohirrim", traitId: "charge" },
+  { unitTypeId: "galadhrim_warden", traitId: "forest_stalker" },
+  { unitTypeId: "galadhrim_warden", traitId: "tireless" },
+  { unitTypeId: "galadhrim_warden", traitId: "volley" },
+  { unitTypeId: "uruk_hai", traitId: "relentless" },
+  { unitTypeId: "uruk_hai", traitId: "fear" },
+];
+
+// --- Unit abilities (active battle moves) --------------------------------
+
+export const unitAbilitiesCatalogue = [
+  { unitTypeId: "rohirrim", name: "Devastating Charge", cooldownTurns: 3, description: "A full-gallop lance charge across open ground.", effect: { damage_mult: 2.0, requires: "open_ground" } },
+  { unitTypeId: "galadhrim_warden", name: "Arrow Storm", cooldownTurns: 4, description: "Every warden looses at once into a killing zone.", effect: { area_fire: true, damage_mult: 1.5 } },
+  { unitTypeId: "citadel_guard", name: "Hold the Line", cooldownTurns: 5, description: "Shields locked, the Guard cannot be made to break.", effect: { morale_immune: true, duration_turns: 2 } },
+  { unitTypeId: "uruk_hai", name: "Blood Frenzy", cooldownTurns: 4, description: "They throw aside defence for slaughter.", effect: { damage_mult: 1.5, armor_penalty: 2 } },
+];

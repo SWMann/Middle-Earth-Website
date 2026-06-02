@@ -41,6 +41,13 @@ import {
   districtTierOutputCatalogue,
   unitTypesCatalogue,
   unitRecruitmentCostCatalogue,
+  unitAttacksCatalogue,
+  unitRanksCatalogue,
+  unitCountersCatalogue,
+  unitTerrainModifiersCatalogue,
+  combatTraitsCatalogue,
+  unitTraitsCatalogue,
+  unitAbilitiesCatalogue,
   occupationClassesCatalogue,
   POPULATION_COMPOSITION_BY_TIER,
 } from "./catalogue-seed.ts";
@@ -736,6 +743,55 @@ async function main() {
   await db.execute(sqlOp`DELETE FROM config.unit_recruitment_cost`);
   for (const urc of unitRecruitmentCostCatalogue) {
     await db.insert(schema.unitRecruitmentCost).values(urc);
+  }
+
+  // Military depth: attacks, ranks, counters, terrain, traits, abilities.
+  await db.execute(sqlOp`DELETE FROM config.unit_attacks`);
+  for (const a of unitAttacksCatalogue) {
+    await db.insert(schema.unitAttacks).values(a);
+  }
+  for (const r of unitRanksCatalogue) {
+    await db
+      .insert(schema.unitRanks)
+      .values(r)
+      .onConflictDoUpdate({
+        target: schema.unitRanks.rankKey,
+        set: {
+          displayName: r.displayName,
+          level: r.level,
+          xpRequired: r.xpRequired,
+          healthMultPct: r.healthMultPct,
+          damageMultPct: r.damageMultPct,
+          moraleBonus: r.moraleBonus,
+          description: r.description,
+        },
+      });
+  }
+  await db.execute(sqlOp`DELETE FROM config.unit_counters`);
+  for (const c of unitCountersCatalogue) {
+    await db.insert(schema.unitCounters).values(c);
+  }
+  await db.execute(sqlOp`DELETE FROM config.unit_terrain_modifiers`);
+  for (const t of unitTerrainModifiersCatalogue) {
+    await db.insert(schema.unitTerrainModifiers).values(t);
+  }
+  // Traits before unit_traits (FK); combat_traits is upserted.
+  await db.execute(sqlOp`DELETE FROM config.unit_traits`);
+  for (const ct of combatTraitsCatalogue) {
+    await db
+      .insert(schema.combatTraits)
+      .values(ct)
+      .onConflictDoUpdate({
+        target: schema.combatTraits.id,
+        set: { displayName: ct.displayName, description: ct.description, effect: ct.effect },
+      });
+  }
+  for (const ut of unitTraitsCatalogue) {
+    await db.insert(schema.unitTraits).values(ut);
+  }
+  await db.execute(sqlOp`DELETE FROM config.unit_abilities`);
+  for (const ab of unitAbilitiesCatalogue) {
+    await db.insert(schema.unitAbilities).values(ab);
   }
 
   for (const oc of occupationClassesCatalogue) {

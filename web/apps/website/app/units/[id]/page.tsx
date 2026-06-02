@@ -4,6 +4,12 @@ import {
   getUnitType,
   getAllUnitTypes,
   getUnitRecruitmentCost,
+  getUnitAttacks,
+  getUnitTraits,
+  getUnitAbilities,
+  getCountersForCategory,
+  getTerrainModifiersForCategory,
+  getRankLadder,
 } from "@/lib/data/catalogue";
 import { getFaction } from "@/lib/data/factions";
 import { FactionTag } from "@/components/tags/faction-tag";
@@ -36,10 +42,17 @@ export default async function UnitDetailPage({
   const unit = await getUnitType(id);
   if (!unit) notFound();
 
-  const [costs, faction] = await Promise.all([
-    getUnitRecruitmentCost(unit.id),
-    unit.factionId ? getFaction(unit.factionId) : Promise.resolve(null),
-  ]);
+  const [costs, faction, attacks, traits, abilities, counters, terrain, ranks] =
+    await Promise.all([
+      getUnitRecruitmentCost(unit.id),
+      unit.factionId ? getFaction(unit.factionId) : Promise.resolve(null),
+      getUnitAttacks(unit.id),
+      getUnitTraits(unit.id),
+      getUnitAbilities(unit.id),
+      getCountersForCategory(unit.category),
+      getTerrainModifiersForCategory(unit.category),
+      getRankLadder(),
+    ]);
 
   const totalUpkeep =
     unit.upkeepFoodDaily > 0 || unit.upkeepCoinDaily > 0
@@ -72,7 +85,7 @@ export default async function UnitDetailPage({
 
       <section className="border-y border-stone-200 dark:border-stone-800 py-6">
         <h2 className="text-xs uppercase tracking-widest opacity-60 mb-3">
-          Combat profile
+          Combat profile (Regular rank)
         </h2>
         <dl className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           <Stat label="Health" value={unit.health.toString()} />
@@ -81,6 +94,158 @@ export default async function UnitDetailPage({
           <Stat label="Speed" value={unit.speed.toFixed(1)} />
         </dl>
       </section>
+
+      {/* ----- Weapons ----- */}
+      {attacks.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Weapons</h2>
+          <ul className="space-y-2 text-sm">
+            {attacks.map((a) => (
+              <li
+                key={a.id}
+                className="flex items-baseline gap-3 flex-wrap border-b border-stone-100 dark:border-stone-900 py-1.5"
+              >
+                <span className="font-medium">{a.weaponName}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-900 text-stone-500">
+                  {a.rangeType}
+                  {a.rangeType === "ranged" && a.rangeBlocks
+                    ? ` · ${a.rangeBlocks} blk`
+                    : ""}
+                </span>
+                {a.ammo != null && (
+                  <span className="text-xs text-stone-500">{a.ammo} ammo</span>
+                )}
+                <span className="ml-auto text-sm tabular-nums">
+                  {a.damage} dmg
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Traits ----- */}
+      {traits.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Traits</h2>
+          <ul className="space-y-2 text-sm">
+            {traits.map((t) => (
+              <li key={t.id}>
+                <span className="font-medium">{t.displayName}</span>
+                {t.description && (
+                  <span className="opacity-70"> — {t.description}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Abilities ----- */}
+      {abilities.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Battle abilities</h2>
+          <ul className="space-y-2 text-sm">
+            {abilities.map((ab) => (
+              <li
+                key={ab.id}
+                className="rounded border border-stone-200 dark:border-stone-800 p-3"
+              >
+                <div className="flex items-baseline gap-2">
+                  <span className="font-medium">{ab.name}</span>
+                  {ab.cooldownTurns > 0 && (
+                    <span className="text-xs text-stone-500">
+                      {ab.cooldownTurns}-turn cooldown
+                    </span>
+                  )}
+                </div>
+                {ab.description && (
+                  <p className="text-xs opacity-70 mt-1">{ab.description}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Counters ----- */}
+      {counters.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">
+            Matchups{" "}
+            <span className="text-xs text-stone-500 font-normal">
+              (as {unit.category})
+            </span>
+          </h2>
+          <ul className="space-y-1.5 text-sm">
+            {counters.map((c) => (
+              <li
+                key={c.defenderCategory}
+                className="flex items-baseline gap-3 flex-wrap"
+              >
+                <span>vs {c.defenderCategory}</span>
+                <span
+                  className={`tabular-nums font-medium ${c.modifierPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
+                >
+                  {c.modifierPct >= 0 ? "+" : ""}
+                  {c.modifierPct}%
+                </span>
+                {c.note && <span className="text-xs opacity-60">— {c.note}</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Terrain ----- */}
+      {terrain.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Terrain</h2>
+          <ul className="space-y-1.5 text-sm">
+            {terrain.map((t) => (
+              <li key={t.biome} className="flex items-baseline gap-3 flex-wrap">
+                <span className="w-20 text-stone-500">{capitalise(t.biome)}</span>
+                <span
+                  className={`tabular-nums font-medium ${t.modifierPct >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}
+                >
+                  {t.modifierPct >= 0 ? "+" : ""}
+                  {t.modifierPct}%
+                </span>
+                {t.note && <span className="text-xs opacity-60">— {t.note}</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Veterancy ladder ----- */}
+      {ranks.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Veterancy</h2>
+          <p className="text-xs opacity-60 mb-2">
+            Surviving units climb this shared ladder by fighting battles. The
+            profile above is the Regular baseline.
+          </p>
+          <ul className="space-y-1.5 text-sm">
+            {ranks.map((r) => (
+              <li
+                key={r.rankKey}
+                className="flex items-baseline gap-3 flex-wrap border-b border-stone-100 dark:border-stone-900 py-1.5"
+              >
+                <span className="w-16 font-medium">{r.displayName}</span>
+                <span className="text-xs text-stone-500">
+                  {r.xpRequired === 0 ? "start" : `${r.xpRequired} battles`}
+                </span>
+                <span className="ml-auto text-xs tabular-nums opacity-70">
+                  hp ×{r.healthMultPct}% · dmg ×{r.damageMultPct}% ·{" "}
+                  {r.moraleBonus >= 0 ? "+" : ""}
+                  {r.moraleBonus} morale
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h2 className="text-lg font-semibold mb-3">Recruitment</h2>
@@ -130,6 +295,10 @@ export default async function UnitDetailPage({
       </section>
     </div>
   );
+}
+
+function capitalise(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

@@ -360,3 +360,59 @@ export const getUnitRecruitmentCost = cache(async (unitTypeId: string) => {
     )
     .where(eq(schema.unitRecruitmentCost.unitTypeId, unitTypeId));
 });
+
+export const getUnitAttacks = cache(async (unitTypeId: string) => {
+  return await db
+    .select()
+    .from(schema.unitAttacks)
+    .where(eq(schema.unitAttacks.unitTypeId, unitTypeId));
+});
+
+export const getUnitTraits = cache(async (unitTypeId: string) => {
+  return await db
+    .select({
+      id: schema.combatTraits.id,
+      displayName: schema.combatTraits.displayName,
+      description: schema.combatTraits.description,
+      effect: schema.combatTraits.effect,
+    })
+    .from(schema.unitTraits)
+    .innerJoin(
+      schema.combatTraits,
+      eq(schema.unitTraits.traitId, schema.combatTraits.id),
+    )
+    .where(eq(schema.unitTraits.unitTypeId, unitTypeId));
+});
+
+export const getUnitAbilities = cache(async (unitTypeId: string) => {
+  return await db
+    .select()
+    .from(schema.unitAbilities)
+    .where(eq(schema.unitAbilities.unitTypeId, unitTypeId));
+});
+
+/** Counter matchups where this unit's category is the attacker. */
+export const getCountersForCategory = cache(async (category: string) => {
+  return await db
+    .select()
+    .from(schema.unitCounters)
+    .where(eq(schema.unitCounters.attackerCategory, category))
+    .orderBy(desc(schema.unitCounters.modifierPct));
+});
+
+/** Terrain modifiers for a unit's category. */
+export const getTerrainModifiersForCategory = cache(async (category: string) => {
+  return await db
+    .select()
+    .from(schema.unitTerrainModifiers)
+    .where(eq(schema.unitTerrainModifiers.category, category))
+    .orderBy(desc(schema.unitTerrainModifiers.modifierPct));
+});
+
+/** The global veterancy ladder (shared by all units). */
+export const getRankLadder = cache(async () => {
+  return await db
+    .select()
+    .from(schema.unitRanks)
+    .orderBy(schema.unitRanks.level);
+});
