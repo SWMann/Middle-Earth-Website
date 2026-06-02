@@ -8,6 +8,7 @@ import {
   getSettlementsByFaction,
 } from "@/lib/data/factions";
 import { getRecentEvents } from "@/lib/data/events";
+import { getCultureForFaction } from "@/lib/data/catalogue";
 import {
   getDiplomaticStatesFor,
   otherFaction,
@@ -56,7 +57,7 @@ export default async function FactionDetailPage({
   const f = await getFaction(id);
   if (!f) notFound();
 
-  const [parent, subs, regions, settlements, characters, events, diplomaticStates] = await Promise.all([
+  const [parent, subs, regions, settlements, characters, events, diplomaticStates, culture] = await Promise.all([
     f.parentFactionId ? getFaction(f.parentFactionId) : Promise.resolve(null),
     getSubfactions(f.id),
     getRegionsClaimedBy(f.id),
@@ -64,6 +65,7 @@ export default async function FactionDetailPage({
     getCharactersByFaction(f.id),
     getRecentEvents({ visibility: ["public"], factionId: f.id, touching: true, limit: 10 }),
     getDiplomaticStatesFor(f.id),
+    getCultureForFaction(f.id),
   ]);
 
   // Faction leader = highest-influence active character. Reasonable
@@ -134,6 +136,15 @@ export default async function FactionDetailPage({
           <span className="text-sm text-stone-500">
             {alignmentLabel(f.alignment)}
           </span>
+          {culture && (
+            <Link
+              href={{ pathname: `/cultures/${culture.cultureId}` }}
+              className="text-xs px-2 py-0.5 rounded-full border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-900"
+              title={`Builds in the ${culture.cultureName} architectural style`}
+            >
+              {culture.cultureName} style
+            </Link>
+          )}
         </div>
         {f.loreSummary && (
           <p className="text-base opacity-80 leading-relaxed max-w-2xl">

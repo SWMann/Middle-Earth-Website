@@ -51,6 +51,13 @@ export const factions = game.table("factions", {
   bannerHex: text("banner_hex"), // optional faction colour, e.g. '#1d4ed8'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   succeededFrom: text("succeeded_from"), // if seceded from another faction
+  /**
+   * The faction's architectural culture (config.cultures.id). Soft text
+   * FK — no .references() — to avoid a config↔game import cycle, matching
+   * the codebase idiom (districts.districtType, units.unitType, etc.).
+   * Drives building variant names and the approved decoration palette.
+   */
+  cultureId: text("culture_id"),
 });
 
 export const factionTraits = game.table(

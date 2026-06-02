@@ -438,6 +438,7 @@ export const getBuildingComponents = cache(async (buildingTypeId: string) => {
     .select({
       id: schema.functionalComponents.id,
       displayName: schema.functionalComponents.displayName,
+      quantity: schema.buildingProvidesComponents.quantity,
     })
     .from(schema.buildingProvidesComponents)
     .innerJoin(
@@ -446,6 +447,77 @@ export const getBuildingComponents = cache(async (buildingTypeId: string) => {
     )
     .where(eq(schema.buildingProvidesComponents.buildingTypeId, buildingTypeId));
 });
+
+export const getBuildingType = cache(async (id: string) => {
+  const [row] = await db
+    .select()
+    .from(schema.buildingTypes)
+    .where(eq(schema.buildingTypes.id, id));
+  return row ?? null;
+});
+
+export const getBuildingBuildCost = cache(async (buildingTypeId: string) => {
+  return await db
+    .select({
+      resourceId: schema.buildingBuildCost.resourceId,
+      resourceName: schema.resources.displayName,
+      amount: schema.buildingBuildCost.amount,
+    })
+    .from(schema.buildingBuildCost)
+    .innerJoin(
+      schema.resources,
+      eq(schema.buildingBuildCost.resourceId, schema.resources.id),
+    )
+    .where(eq(schema.buildingBuildCost.buildingTypeId, buildingTypeId));
+});
+
+/** All building material costs in one shot, for the buildings index. */
+export const getAllBuildingBuildCosts = cache(async () => {
+  return await db
+    .select({
+      buildingTypeId: schema.buildingBuildCost.buildingTypeId,
+      resourceId: schema.buildingBuildCost.resourceId,
+      resourceName: schema.resources.displayName,
+      amount: schema.buildingBuildCost.amount,
+    })
+    .from(schema.buildingBuildCost)
+    .innerJoin(
+      schema.resources,
+      eq(schema.buildingBuildCost.resourceId, schema.resources.id),
+    );
+});
+
+export const getBuildingTags = cache(async (buildingTypeId: string) => {
+  const rows = await db
+    .select({ tag: schema.buildingTags.tag })
+    .from(schema.buildingTags)
+    .where(eq(schema.buildingTags.buildingTypeId, buildingTypeId));
+  return rows.map((r) => r.tag);
+});
+
+/** All building tags in one shot, for the buildings index. */
+export const getAllBuildingTags = cache(async () => {
+  return await db
+    .select({
+      buildingTypeId: schema.buildingTags.buildingTypeId,
+      tag: schema.buildingTags.tag,
+    })
+    .from(schema.buildingTags);
+});
+
+/** Buildings that upgrade FROM the given one (Bakehouse → Great Bakehouse). */
+export const getBuildingUpgradeTargets = cache(
+  async (buildingTypeId: string) => {
+    return await db
+      .select({
+        id: schema.buildingTypes.id,
+        displayName: schema.buildingTypes.displayName,
+        level: schema.buildingTypes.level,
+      })
+      .from(schema.buildingTypes)
+      .where(eq(schema.buildingTypes.upgradesFrom, buildingTypeId));
+  },
+);
 
 export const getDistrictRequiredBuildings = cache(
   async (districtTypeId: string) => {
@@ -457,6 +529,8 @@ export const getDistrictRequiredBuildings = cache(
         buildingName: schema.buildingTypes.displayName,
         count: schema.districtRequiredBuildings.count,
         themeNote: schema.districtRequiredBuildings.themeNote,
+        themeTag: schema.districtRequiredBuildings.themeTag,
+        groupKey: schema.districtRequiredBuildings.groupKey,
       })
       .from(schema.districtRequiredBuildings)
       .leftJoin(
@@ -495,6 +569,7 @@ export const getAllBuildingComponentLinks = cache(async () => {
       buildingTypeId: schema.buildingProvidesComponents.buildingTypeId,
       componentId: schema.buildingProvidesComponents.componentId,
       componentName: schema.functionalComponents.displayName,
+      quantity: schema.buildingProvidesComponents.quantity,
     })
     .from(schema.buildingProvidesComponents)
     .innerJoin(
@@ -535,4 +610,112 @@ export const getDecorationCriteria = cache(async () => {
 
 export const getTierDecorationThresholds = cache(async () => {
   return await db.select().from(schema.tierDecorationThresholds);
+});
+
+// --- Cultures & building variants ----------------------------------------
+
+export const getAllCultures = cache(async () => {
+  return await db
+    .select()
+    .from(schema.cultures)
+    .orderBy(schema.cultures.displayName);
+});
+
+export const getCulture = cache(async (id: string) => {
+  const [row] = await db
+    .select()
+    .from(schema.cultures)
+    .where(eq(schema.cultures.id, id));
+  return row ?? null;
+});
+
+export const getCulturePalettes = cache(async (cultureId: string) => {
+  return await db
+    .select({
+      id: schema.culturePalettes.id,
+      role: schema.culturePalettes.role,
+      blocks: schema.culturePalettes.blocks,
+      note: schema.culturePalettes.note,
+    })
+    .from(schema.culturePalettes)
+    .where(eq(schema.culturePalettes.cultureId, cultureId))
+    .orderBy(schema.culturePalettes.role);
+});
+
+/** The cultural reskins of one building, across all cultures. */
+export const getBuildingVariants = cache(async (buildingTypeId: string) => {
+  return await db
+    .select({
+      cultureId: schema.buildingVariants.cultureId,
+      cultureName: schema.cultures.displayName,
+      variantName: schema.buildingVariants.variantName,
+      description: schema.buildingVariants.description,
+      paletteNote: schema.buildingVariants.paletteNote,
+      schematicUrl: schema.buildingVariants.schematicUrl,
+    })
+    .from(schema.buildingVariants)
+    .innerJoin(
+      schema.cultures,
+      eq(schema.buildingVariants.cultureId, schema.cultures.id),
+    )
+    .where(eq(schema.buildingVariants.buildingTypeId, buildingTypeId))
+    .orderBy(schema.cultures.displayName);
+});
+
+/** Every building reskin a culture defines. */
+export const getCultureVariants = cache(async (cultureId: string) => {
+  return await db
+    .select({
+      buildingTypeId: schema.buildingVariants.buildingTypeId,
+      buildingName: schema.buildingTypes.displayName,
+      variantName: schema.buildingVariants.variantName,
+      description: schema.buildingVariants.description,
+      paletteNote: schema.buildingVariants.paletteNote,
+    })
+    .from(schema.buildingVariants)
+    .innerJoin(
+      schema.buildingTypes,
+      eq(schema.buildingVariants.buildingTypeId, schema.buildingTypes.id),
+    )
+    .where(eq(schema.buildingVariants.cultureId, cultureId))
+    .orderBy(schema.buildingTypes.displayName);
+});
+
+/** All variant links in one shot (for variant counts on the buildings index). */
+export const getAllBuildingVariantLinks = cache(async () => {
+  return await db
+    .select({
+      buildingTypeId: schema.buildingVariants.buildingTypeId,
+      cultureId: schema.buildingVariants.cultureId,
+      variantName: schema.buildingVariants.variantName,
+    })
+    .from(schema.buildingVariants);
+});
+
+/** The culture a faction builds in (null-safe). */
+export const getCultureForFaction = cache(async (factionId: string) => {
+  const [row] = await db
+    .select({
+      cultureId: schema.cultures.id,
+      cultureName: schema.cultures.displayName,
+      description: schema.cultures.description,
+    })
+    .from(schema.factions)
+    .leftJoin(schema.cultures, eq(schema.factions.cultureId, schema.cultures.id))
+    .where(eq(schema.factions.id, factionId));
+  return row?.cultureId ? row : null;
+});
+
+/** The factions that build in a culture (member list on the culture page). */
+export const getFactionsForCulture = cache(async (cultureId: string) => {
+  return await db
+    .select({
+      id: schema.factions.id,
+      displayName: schema.factions.displayName,
+      bannerHex: schema.factions.bannerHex,
+      alignment: schema.factions.alignment,
+    })
+    .from(schema.factions)
+    .where(eq(schema.factions.cultureId, cultureId))
+    .orderBy(schema.factions.displayName);
 });

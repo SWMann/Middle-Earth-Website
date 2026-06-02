@@ -4,6 +4,9 @@ import {
   getAllFunctionalComponents,
   getAllBuildingComponentLinks,
   getBuildingDistrictUsage,
+  getAllBuildingTags,
+  getAllBuildingBuildCosts,
+  getAllBuildingVariantLinks,
 } from "@/lib/data/catalogue";
 
 export const revalidate = 600;
@@ -25,19 +28,35 @@ const CATEGORY_BLURB: Record<string, string> = {
     "Optional prestige structures. They rarely supply components but lift a plot's decoration score and standing.",
 };
 
-export default async function BuildingsIndexPage() {
-  const [buildings, components, links, usage] = await Promise.all([
-    getAllBuildingTypes(),
-    getAllFunctionalComponents(),
-    getAllBuildingComponentLinks(),
-    getBuildingDistrictUsage(),
-  ]);
+function footprint(min: number | null, max: number | null): string | null {
+  if (min != null && max != null) return `${min}–${max} blk²`;
+  if (min != null) return `≥ ${min} blk²`;
+  if (max != null) return `≤ ${max} blk²`;
+  return null;
+}
 
-  const providesByBuilding = new Map<string, string[]>();
+export default async function BuildingsIndexPage() {
+  const [buildings, components, links, usage, tags, costs, variants] =
+    await Promise.all([
+      getAllBuildingTypes(),
+      getAllFunctionalComponents(),
+      getAllBuildingComponentLinks(),
+      getBuildingDistrictUsage(),
+      getAllBuildingTags(),
+      getAllBuildingBuildCosts(),
+      getAllBuildingVariantLinks(),
+    ]);
+
+  const providesByBuilding = new Map<
+    string,
+    { name: string; quantity: number }[]
+  >();
   for (const l of links) {
     if (!providesByBuilding.has(l.buildingTypeId))
       providesByBuilding.set(l.buildingTypeId, []);
-    providesByBuilding.get(l.buildingTypeId)!.push(l.componentName);
+    providesByBuilding
+      .get(l.buildingTypeId)!
+      .push({ name: l.componentName, quantity: l.quantity });
   }
 
   const usageByBuilding = new Map<
@@ -53,6 +72,31 @@ export default async function BuildingsIndexPage() {
       districtName: u.districtName,
     });
   }
+
+  const tagsByBuilding = new Map<string, string[]>();
+  for (const t of tags) {
+    if (!tagsByBuilding.has(t.buildingTypeId))
+      tagsByBuilding.set(t.buildingTypeId, []);
+    tagsByBuilding.get(t.buildingTypeId)!.push(t.tag);
+  }
+
+  const costByBuilding = new Map<string, { name: string; amount: number }[]>();
+  for (const c of costs) {
+    if (!costByBuilding.has(c.buildingTypeId))
+      costByBuilding.set(c.buildingTypeId, []);
+    costByBuilding
+      .get(c.buildingTypeId)!
+      .push({ name: c.resourceName, amount: c.amount });
+  }
+
+  const variantsByBuilding = new Map<string, string[]>();
+  for (const v of variants) {
+    if (!variantsByBuilding.has(v.buildingTypeId))
+      variantsByBuilding.set(v.buildingTypeId, []);
+    variantsByBuilding.get(v.buildingTypeId)!.push(v.variantName);
+  }
+
+  const nameById = new Map(buildings.map((b) => [b.id, b.displayName]));
 
   const byCategory = new Map<string, typeof buildings>();
   for (const b of buildings) {
@@ -75,10 +119,13 @@ export default async function BuildingsIndexPage() {
           A district is not a single block — it is assembled from buildings. Each
           building supplies one or more{" "}
           <span className="font-medium">functional components</span> (a bed, a
-          forge, an altar), and a district is only complete once the buildings on
-          its plot collectively provide everything it requires. Players are free
-          to lay out, style, and scale each building however they like, so long
-          as the components are present.
+          forge, an altar) in some quantity, and a district is complete once its
+          buildings collectively provide everything it requires. Every culture
+          dresses the same building in its own style — see{" "}
+          <Link href={{ pathname: "/cultures" }} className="underline">
+            Cultures
+          </Link>
+          .
         </p>
       </header>
 
@@ -98,6 +145,10 @@ export default async function BuildingsIndexPage() {
               {list.map((b) => {
                 const provides = providesByBuilding.get(b.id) ?? [];
                 const usedBy = usageByBuilding.get(b.id) ?? [];
+                const bTags = tagsByBuilding.get(b.id) ?? [];
+                const bCost = costByBuilding.get(b.id) ?? [];
+                const bVariants = variantsByBuilding.get(b.id) ?? [];
+                const fp = footprint(b.minFootprintBlocks, b.maxFootprintBlocks);
                 return (
                   <li
                     key={b.id}
@@ -110,6 +161,21 @@ export default async function BuildingsIndexPage() {
                       </span>
                       <span className="font-mono text-xs text-stone-500">
                         {b.id}
+                      </span>
+                      {b.level > 1 && (
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">
+                          tier {b.level}
+                          {b.upgradesFrom && nameById.get(b.upgradesFrom)
+                            ? ` · upgrades ${nameById.get(b.upgradesFrom)}`
+                            : ""}
+                        </span>
+                      )}
+                      <span className="ml-auto text-xs text-stone-500 tabular-nums">
+                        {b.tierMin && <>tier {b.tierMin}+ </>}
+                        {fp && <>· {fp}</>}
+                        {b.minHeightBlocks != null && (
+                          <> · ≥{b.minHeightBlocks} high</>
+                        )}
                       </span>
                     </div>
                     {b.description && (
@@ -126,13 +192,35 @@ export default async function BuildingsIndexPage() {
                         <span className="inline-flex flex-wrap gap-1.5 align-middle">
                           {provides.map((c) => (
                             <span
-                              key={c}
+                              key={c.name}
                               className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300"
                             >
-                              {c}
+                              {c.quantity > 1 ? `${c.quantity}× ` : ""}
+                              {c.name}
                             </span>
                           ))}
                         </span>
+                      </div>
+                    )}
+
+                    {(bTags.length > 0 || bCost.length > 0) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                        {bCost.length > 0 && (
+                          <span className="opacity-70">
+                            <span className="opacity-60">Build: </span>
+                            {bCost
+                              .map((c) => `${c.amount}× ${c.name}`)
+                              .join(", ")}
+                          </span>
+                        )}
+                        {bTags.map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-900 text-stone-500 font-mono"
+                          >
+                            {t}
+                          </span>
+                        ))}
                       </div>
                     )}
 
@@ -152,6 +240,15 @@ export default async function BuildingsIndexPage() {
                             </Link>
                           </span>
                         ))}
+                      </div>
+                    )}
+
+                    {bVariants.length > 0 && (
+                      <div className="mt-2 text-xs opacity-70">
+                        <span className="opacity-60">
+                          Cultural variants:{" "}
+                        </span>
+                        {bVariants.join(", ")}
                       </div>
                     )}
                   </li>
@@ -188,6 +285,10 @@ export default async function BuildingsIndexPage() {
         See also:{" "}
         <Link href={{ pathname: "/districts" }} className="underline">
           Districts
+        </Link>{" "}
+        ·{" "}
+        <Link href={{ pathname: "/cultures" }} className="underline">
+          Cultures
         </Link>{" "}
         ·{" "}
         <Link href={{ pathname: "/decoration" }} className="underline">

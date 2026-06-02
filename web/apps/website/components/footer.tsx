@@ -35,6 +35,9 @@ export function Footer() {
           <Link href={{ pathname: "/buildings" }} className="hover:underline">
             Buildings
           </Link>
+          <Link href={{ pathname: "/cultures" }} className="hover:underline">
+            Cultures
+          </Link>
           <Link href={{ pathname: "/units" }} className="hover:underline">
             Units
           </Link>

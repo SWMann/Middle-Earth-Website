@@ -479,34 +479,119 @@ export const functionalComponentsCatalogue = [
 
 // --- Building types -------------------------------------------------------
 
-export const buildingTypesCatalogue = [
-  { id: "bunkhouse", displayName: "Bunkhouse", category: "functional", description: "Rows of bunks under one roof.", provides: ["BED"] },
-  { id: "bakehouse", displayName: "Bakehouse", category: "functional", description: "Ovens, a kneading-bench, a flour-bin.", provides: ["COOKING"] },
-  { id: "flour_mill", displayName: "Flour Mill", category: "functional", description: "A millstone, geared to wind or water.", provides: ["STORAGE"] },
-  { id: "forge_building", displayName: "Forge House", category: "functional", description: "A stone-hooded smelting forge.", provides: ["FORGE"] },
+// Shape: provides lists the component ids; `quantities` overrides the
+// default of 1 for any component supplied in bulk. Intrinsic stats
+// (tierMin, footprint, upgradesFrom/level) are optional.
+export type BuildingSeed = {
+  id: string;
+  displayName: string;
+  category: string;
+  description: string;
+  provides: string[];
+  quantities?: Record<string, number>;
+  tierMin?: string;
+  minFootprintBlocks?: number;
+  maxFootprintBlocks?: number;
+  minHeightBlocks?: number;
+  upgradesFrom?: string;
+  level?: number;
+};
+
+export const buildingTypesCatalogue: BuildingSeed[] = [
+  { id: "bunkhouse", displayName: "Bunkhouse", category: "functional", description: "Rows of bunks under one roof.", provides: ["BED"], quantities: { BED: 8 }, minFootprintBlocks: 30, maxFootprintBlocks: 120 },
+  { id: "bakehouse", displayName: "Bakehouse", category: "functional", description: "Ovens, a kneading-bench, a flour-bin.", provides: ["COOKING"], minFootprintBlocks: 25 },
+  { id: "great_bakehouse", displayName: "Great Bakehouse", category: "functional", description: "A double-oven bakery turning out bread for a whole quarter.", provides: ["COOKING", "STORAGE"], quantities: { COOKING: 2 }, tierMin: "town", minFootprintBlocks: 80, minHeightBlocks: 6, upgradesFrom: "bakehouse", level: 2 },
+  { id: "flour_mill", displayName: "Flour Mill", category: "functional", description: "A millstone, geared to wind.", provides: ["STORAGE"], minHeightBlocks: 6 },
+  { id: "watermill", displayName: "Watermill", category: "functional", description: "A millstone driven by an undershot wheel. Needs running water.", provides: ["STORAGE"], quantities: { STORAGE: 2 }, minFootprintBlocks: 30 },
+  { id: "forge_building", displayName: "Forge House", category: "functional", description: "A stone-hooded smelting forge.", provides: ["FORGE"], minFootprintBlocks: 25 },
   { id: "anvil_shed", displayName: "Anvil Shed", category: "functional", description: "An anvil, a slack-tub, a rack of tongs.", provides: ["ANVIL"] },
-  { id: "granary", displayName: "Granary", category: "functional", description: "Raised, dry, rodent-proofed grain store.", provides: ["STORAGE"] },
-  { id: "captains_hall", displayName: "Captain's Hall", category: "structural", description: "The seat where a settlement's leader holds court.", provides: ["TABLE", "BANNER"] },
-  { id: "tower_armoury", displayName: "Tower Armoury", category: "functional", description: "Racked arms and a watch-room.", provides: ["ARROW_RACK", "STORAGE"] },
-  { id: "stable_block", displayName: "Stable Block", category: "functional", description: "Stalls, a tack-room, a paddock gate.", provides: ["STABLE_STALL"] },
-  { id: "watchpost", displayName: "Watchpost", category: "structural", description: "An elevated lookout with a signal-beacon.", provides: [] },
-  { id: "healing_ward", displayName: "Healing Ward", category: "functional", description: "Clean cots, a herb-store, a warm fire.", provides: ["BED", "HEARTH"] },
-  { id: "scriptorium", displayName: "Scriptorium", category: "functional", description: "Writing-desks and shelved scrolls.", provides: ["LECTERN", "STORAGE"] },
-  { id: "market_stalls", displayName: "Market Stalls", category: "functional", description: "Covered trading stalls and a weigh-house.", provides: ["TABLE"] },
-  { id: "hearth_hall", displayName: "Hearth Hall", category: "structural", description: "A long hall around a central fire.", provides: ["HEARTH", "TABLE"] },
-  { id: "chapel", displayName: "Chapel", category: "landmark", description: "A small place of reverence.", provides: ["ALTAR"] },
+  { id: "granary", displayName: "Granary", category: "functional", description: "Raised, dry, rodent-proofed grain store.", provides: ["STORAGE"], quantities: { STORAGE: 2 } },
+  { id: "captains_hall", displayName: "Captain's Hall", category: "structural", description: "The seat where a settlement's leader holds court.", provides: ["TABLE", "BANNER"], tierMin: "town", minFootprintBlocks: 36, minHeightBlocks: 6 },
+  { id: "tower_armoury", displayName: "Tower Armoury", category: "functional", description: "Racked arms and a watch-room.", provides: ["ARROW_RACK", "STORAGE"], quantities: { ARROW_RACK: 2 }, minHeightBlocks: 8 },
+  { id: "stable_block", displayName: "Stable Block", category: "functional", description: "Stalls, a tack-room, a paddock gate.", provides: ["STABLE_STALL"], quantities: { STABLE_STALL: 4 }, minFootprintBlocks: 40 },
+  { id: "watchpost", displayName: "Watchpost", category: "structural", description: "An elevated lookout with a signal-beacon.", provides: [], minHeightBlocks: 12 },
+  { id: "healing_ward", displayName: "Healing Ward", category: "functional", description: "Clean cots, a herb-store, a warm fire.", provides: ["BED", "HEARTH"], quantities: { BED: 4 } },
+  { id: "scriptorium", displayName: "Scriptorium", category: "functional", description: "Writing-desks and shelved scrolls.", provides: ["LECTERN", "STORAGE"], quantities: { LECTERN: 2 }, tierMin: "town", minFootprintBlocks: 30 },
+  { id: "market_stalls", displayName: "Market Stalls", category: "functional", description: "Covered trading stalls and a weigh-house.", provides: ["TABLE"], quantities: { TABLE: 3 } },
+  { id: "hearth_hall", displayName: "Hearth Hall", category: "structural", description: "A long hall around a central fire.", provides: ["HEARTH", "TABLE"], quantities: { TABLE: 2 }, minFootprintBlocks: 48, minHeightBlocks: 5 },
+  { id: "chapel", displayName: "Chapel", category: "landmark", description: "A small place of reverence.", provides: ["ALTAR"], minHeightBlocks: 7 },
   { id: "well_house", displayName: "Well House", category: "functional", description: "A roofed, drawn well.", provides: ["WELL"] },
+];
+
+// --- Building materials (cost to raise one building) ---------------------
+
+export const buildingBuildCostCatalogue = [
+  { buildingTypeId: "bunkhouse", resourceId: "R:Wood", amount: 12 },
+  { buildingTypeId: "bakehouse", resourceId: "R:Stone", amount: 8 },
+  { buildingTypeId: "bakehouse", resourceId: "R:Wood", amount: 6 },
+  { buildingTypeId: "great_bakehouse", resourceId: "R:Stone", amount: 20 },
+  { buildingTypeId: "great_bakehouse", resourceId: "R:Wood", amount: 10 },
+  { buildingTypeId: "flour_mill", resourceId: "R:Wood", amount: 14 },
+  { buildingTypeId: "watermill", resourceId: "R:Wood", amount: 10 },
+  { buildingTypeId: "watermill", resourceId: "R:Stone", amount: 8 },
+  { buildingTypeId: "forge_building", resourceId: "R:Stone", amount: 16 },
+  { buildingTypeId: "forge_building", resourceId: "R:Iron_Ingot", amount: 4 },
+  { buildingTypeId: "anvil_shed", resourceId: "R:Wood", amount: 6 },
+  { buildingTypeId: "anvil_shed", resourceId: "R:Iron_Ingot", amount: 2 },
+  { buildingTypeId: "granary", resourceId: "R:Wood", amount: 16 },
+  { buildingTypeId: "captains_hall", resourceId: "R:Stone", amount: 30 },
+  { buildingTypeId: "captains_hall", resourceId: "R:Wood", amount: 18 },
+  { buildingTypeId: "tower_armoury", resourceId: "R:Stone", amount: 18 },
+  { buildingTypeId: "stable_block", resourceId: "R:Wood", amount: 20 },
+  { buildingTypeId: "watchpost", resourceId: "R:Stone", amount: 14 },
+  { buildingTypeId: "healing_ward", resourceId: "R:Wood", amount: 10 },
+  { buildingTypeId: "healing_ward", resourceId: "R:Wool", amount: 6 },
+  { buildingTypeId: "scriptorium", resourceId: "R:Stone", amount: 16 },
+  { buildingTypeId: "market_stalls", resourceId: "R:Wood", amount: 12 },
+  { buildingTypeId: "hearth_hall", resourceId: "R:Wood", amount: 24 },
+  { buildingTypeId: "hearth_hall", resourceId: "R:Stone", amount: 12 },
+  { buildingTypeId: "chapel", resourceId: "R:Stone", amount: 22 },
+  { buildingTypeId: "well_house", resourceId: "R:Stone", amount: 10 },
+];
+
+// --- Building tags (verifiable themes) -----------------------------------
+
+export const buildingTagsCatalogue = [
+  { buildingTypeId: "bakehouse", tag: "theme:bakery" },
+  { buildingTypeId: "great_bakehouse", tag: "theme:bakery" },
+  { buildingTypeId: "flour_mill", tag: "theme:bakery" },
+  { buildingTypeId: "watermill", tag: "theme:bakery" },
+  { buildingTypeId: "granary", tag: "theme:agrarian" },
+  { buildingTypeId: "forge_building", tag: "theme:industrial" },
+  { buildingTypeId: "anvil_shed", tag: "theme:industrial" },
+  { buildingTypeId: "tower_armoury", tag: "theme:martial" },
+  { buildingTypeId: "bunkhouse", tag: "theme:martial" },
+  { buildingTypeId: "watchpost", tag: "theme:martial" },
+  { buildingTypeId: "stable_block", tag: "theme:equine" },
+  { buildingTypeId: "scriptorium", tag: "theme:scholarly" },
+  { buildingTypeId: "captains_hall", tag: "theme:civic" },
+  { buildingTypeId: "hearth_hall", tag: "theme:civic" },
+  { buildingTypeId: "market_stalls", tag: "theme:mercantile" },
+  { buildingTypeId: "flour_mill", tag: "mill" },
+  { buildingTypeId: "watermill", tag: "mill" },
 ];
 
 // --- District required buildings ------------------------------------------
 // kind 'specific' names an exact building; 'themed' wants N matching a
 // theme (buildingTypeId null, themeNote set).
 
-export const districtRequiredBuildingsCatalogue = [
+export type RequiredBuildingSeed = {
+  districtTypeId: string;
+  kind: string;
+  buildingTypeId: string | null;
+  count: number;
+  themeNote: string | null;
+  themeTag?: string;
+  groupKey?: string;
+};
+
+export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
   { districtTypeId: "wheat_farm", kind: "specific", buildingTypeId: "granary", count: 1, themeNote: null },
-  { districtTypeId: "bakery", kind: "specific", buildingTypeId: "flour_mill", count: 1, themeNote: null },
+  // A bakery's mill slot accepts EITHER a wind Flour Mill OR a Watermill.
+  { districtTypeId: "bakery", kind: "specific", buildingTypeId: "flour_mill", count: 1, themeNote: null, groupKey: "mill" },
+  { districtTypeId: "bakery", kind: "specific", buildingTypeId: "watermill", count: 1, themeNote: null, groupKey: "mill" },
   { districtTypeId: "bakery", kind: "specific", buildingTypeId: "bakehouse", count: 1, themeNote: null },
-  { districtTypeId: "bakery", kind: "themed", buildingTypeId: null, count: 2, themeNote: "bakery-themed" },
+  { districtTypeId: "bakery", kind: "themed", buildingTypeId: null, count: 2, themeNote: "bakery-themed", themeTag: "theme:bakery" },
   { districtTypeId: "smithy", kind: "specific", buildingTypeId: "forge_building", count: 1, themeNote: null },
   { districtTypeId: "smithy", kind: "specific", buildingTypeId: "anvil_shed", count: 1, themeNote: null },
   { districtTypeId: "foundry", kind: "specific", buildingTypeId: "forge_building", count: 2, themeNote: null },
@@ -608,6 +693,119 @@ export const tierDecorationThresholdsCatalogue = [
   { tier: "city", minScore: 85, reviewMode: "spot", note: "Always staff spot-checked, even at high scores." },
   { tier: "great_city", minScore: null, reviewMode: "full", note: "Always full staff review; score is informational." },
   { tier: "capital", minScore: null, reviewMode: "full", note: "Always full staff review; score is informational." },
+];
+
+// --- Cultures (architectural styles) -------------------------------------
+// Cosmetic only: cultures change a building's NAME, flavour, and approved
+// block palette — never its components or district role. parentCultureId
+// groups sub-styles (silvan + noldorin under an elven parent).
+
+export const culturesCatalogue = [
+  { id: "gondorian", displayName: "Gondorian", parentCultureId: null, description: "Númenórean stonework — white ashlar, black marble, vaulted arches and tall towers. The high style of Minas Tirith and Dol Amroth." },
+  { id: "rohirric", displayName: "Rohirric", parentCultureId: null, description: "Timber and thatch golden halls of the horse-lords, carved with running horses and sun-discs. Meduseld is its summit." },
+  { id: "dwarven", displayName: "Dwarven", parentCultureId: null, description: "Geometric carved stone, deep halls and pillared galleries. Erebor and the Iron Hills build under the mountain, in granite and gold." },
+  { id: "elven", displayName: "Elven", parentCultureId: null, description: "The graceful umbrella of the Eldar — flowing organic forms, white and silver, woven into the living land." },
+  { id: "silvan", displayName: "Silvan (Galadhrim)", parentCultureId: "elven", description: "The wood-elves of Lórien build aloft in the mallorn-boughs — flets and talans of silver bark and golden leaf, touching the ground lightly." },
+  { id: "noldorin", displayName: "Noldorin (Imladris)", parentCultureId: "elven", description: "Rivendell's high-elven style — slender bridges, fluted columns, copper roofs and waterfalls. Stone made to look weightless." },
+  { id: "hobbit", displayName: "Hobbit (Shire)", parentCultureId: null, description: "Round green doors and turf-roofed smials dug into the hillside. Cosy, low, and unfailingly domestic." },
+  { id: "dalish", displayName: "Dalish", parentCultureId: null, description: "The Men of Dale and Esgaroth — bright timber-framed market towns, steep gables, painted shutters and bunting." },
+  { id: "dunlending", displayName: "Dunlending", parentCultureId: null, description: "The wild hill-folk — rough drystone and hide, round huts and stockades, smoke and red ochre." },
+  { id: "haradrim", displayName: "Haradrim", parentCultureId: null, description: "The south — sun-baked mudbrick, sandstone, domes and awnings, serpent-and-sun heraldry." },
+  { id: "easterling", displayName: "Easterling", parentCultureId: null, description: "Rhûn — lacquered timber, tiered roofs, bronze and dark wood, the banners of the wainriders." },
+  { id: "mordor", displayName: "Mordor (Orcish)", parentCultureId: null, description: "Black iron and basalt, jagged and brutal. Built to intimidate, not to please." },
+  { id: "isengard", displayName: "Isengard (Uruk)", parentCultureId: null, description: "Saruman's industry — iron wheels and furnaces sunk into the ring of Orthanc. A mind of metal and wheels." },
+];
+
+// --- Culture palettes (approved blocks per role — for theme_adherence) ---
+
+export const culturePalettesCatalogue = [
+  // Gondorian — white stone, black marble.
+  { cultureId: "gondorian", role: "wall", blocks: ["minecraft:smooth_quartz", "minecraft:diorite", "minecraft:calcite"], note: "White ashlar." },
+  { cultureId: "gondorian", role: "roof", blocks: ["minecraft:deepslate_tiles", "minecraft:polished_blackstone"], note: "Dark slate." },
+  { cultureId: "gondorian", role: "accent", blocks: ["minecraft:polished_blackstone", "minecraft:gold_block"], note: "Black marble and gilding." },
+  { cultureId: "gondorian", role: "foundation", blocks: ["minecraft:stone_bricks", "minecraft:chiseled_stone_bricks"], note: "Dressed stone." },
+  // Rohirric — timber + thatch.
+  { cultureId: "rohirric", role: "wall", blocks: ["minecraft:spruce_planks", "minecraft:white_terracotta", "minecraft:stripped_oak_log"], note: "Daub between timber frame." },
+  { cultureId: "rohirric", role: "roof", blocks: ["minecraft:wheat", "minecraft:hay_block", "minecraft:thatch"], note: "Thatch." },
+  { cultureId: "rohirric", role: "accent", blocks: ["minecraft:gold_block", "minecraft:spruce_log"], note: "Carved horse-heads, gold ridge." },
+  // Dwarven — granite + gold geometry.
+  { cultureId: "dwarven", role: "wall", blocks: ["minecraft:polished_granite", "minecraft:polished_andesite", "minecraft:stone_bricks"], note: "Squared granite." },
+  { cultureId: "dwarven", role: "accent", blocks: ["minecraft:gold_block", "minecraft:copper_block", "minecraft:chiseled_stone_bricks"], note: "Gold inlay, geometric." },
+  { cultureId: "dwarven", role: "foundation", blocks: ["minecraft:deepslate_bricks", "minecraft:polished_deepslate"], note: "Deep stone." },
+  // Silvan — mallorn boughs.
+  { cultureId: "silvan", role: "wall", blocks: ["minecraft:birch_planks", "minecraft:stripped_birch_log"], note: "Silver mallorn bark." },
+  { cultureId: "silvan", role: "roof", blocks: ["minecraft:azalea_leaves", "minecraft:flowering_azalea_leaves", "minecraft:oak_leaves"], note: "Living golden canopy." },
+  { cultureId: "silvan", role: "accent", blocks: ["minecraft:lantern", "minecraft:gold_block"], note: "Soft lamps in the boughs." },
+  // Noldorin — weightless stone + copper.
+  { cultureId: "noldorin", role: "wall", blocks: ["minecraft:smooth_quartz", "minecraft:diorite", "minecraft:white_terracotta"], note: "Pale fluted stone." },
+  { cultureId: "noldorin", role: "roof", blocks: ["minecraft:oxidized_copper", "minecraft:weathered_copper"], note: "Verdigris copper." },
+  // Hobbit — turf + round doors.
+  { cultureId: "hobbit", role: "wall", blocks: ["minecraft:mud_bricks", "minecraft:oak_planks", "minecraft:stripped_oak_log"], note: "Plaster and timber." },
+  { cultureId: "hobbit", role: "roof", blocks: ["minecraft:grass_block", "minecraft:moss_block", "minecraft:rooted_dirt"], note: "Turf roof." },
+  // Dalish — bright timber market town.
+  { cultureId: "dalish", role: "wall", blocks: ["minecraft:oak_planks", "minecraft:white_terracotta", "minecraft:dark_oak_log"], note: "Timber-frame." },
+  { cultureId: "dalish", role: "roof", blocks: ["minecraft:red_terracotta", "minecraft:granite"], note: "Red clay tile." },
+  // Dunlending — drystone + hide.
+  { cultureId: "dunlending", role: "wall", blocks: ["minecraft:cobblestone", "minecraft:mossy_cobblestone", "minecraft:coarse_dirt"], note: "Drystone and daub." },
+  { cultureId: "dunlending", role: "roof", blocks: ["minecraft:hay_block", "minecraft:brown_wool"], note: "Thatch and hide." },
+  // Haradrim — mudbrick + sandstone.
+  { cultureId: "haradrim", role: "wall", blocks: ["minecraft:smooth_sandstone", "minecraft:cut_sandstone", "minecraft:terracotta"], note: "Sun-baked brick." },
+  { cultureId: "haradrim", role: "roof", blocks: ["minecraft:smooth_sandstone", "minecraft:orange_terracotta"], note: "Flat sand roofs and domes." },
+  // Easterling — lacquered tiered timber.
+  { cultureId: "easterling", role: "wall", blocks: ["minecraft:dark_oak_planks", "minecraft:red_terracotta"], note: "Lacquered dark wood." },
+  { cultureId: "easterling", role: "roof", blocks: ["minecraft:warped_planks", "minecraft:cyan_terracotta"], note: "Tiered jade tile." },
+  // Mordor — black iron + basalt.
+  { cultureId: "mordor", role: "wall", blocks: ["minecraft:blackstone", "minecraft:polished_blackstone", "minecraft:basalt"], note: "Black basalt." },
+  { cultureId: "mordor", role: "accent", blocks: ["minecraft:netherite_block", "minecraft:iron_bars", "minecraft:crying_obsidian"], note: "Iron and dread." },
+  // Isengard — iron and furnace.
+  { cultureId: "isengard", role: "wall", blocks: ["minecraft:polished_deepslate", "minecraft:cobbled_deepslate", "minecraft:iron_block"], note: "Iron-bound deep stone." },
+  { cultureId: "isengard", role: "accent", blocks: ["minecraft:furnace", "minecraft:iron_block", "minecraft:lava"], note: "Furnace-pits and wheels." },
+];
+
+// --- Building variants (the cosmetic reskin per culture) -----------------
+// Same functional building; culture-specific name, flavour and palette.
+
+export const buildingVariantsCatalogue = [
+  // Hearth Hall — the gathering hall.
+  { buildingTypeId: "hearth_hall", cultureId: "rohirric", variantName: "Mead Hall", description: "A golden timber hall, benches down both walls, a long fire-pit at the centre. Meduseld in miniature.", paletteNote: "Spruce frame, thatch roof, carved horse-head gables." },
+  { buildingTypeId: "hearth_hall", cultureId: "gondorian", variantName: "Stone Feast-Hall", description: "A vaulted ashlar hall with a raised dais and tall narrow windows.", paletteNote: "White ashlar walls, dark slate roof, black marble floor." },
+  { buildingTypeId: "hearth_hall", cultureId: "dwarven", variantName: "Deep Hearth-Hall", description: "A pillared gallery cut from living granite around a forge-bright hearth.", paletteNote: "Polished granite, gold inlay, deepslate floor." },
+  { buildingTypeId: "hearth_hall", cultureId: "hobbit", variantName: "Common Room", description: "A low, snug room with a great fireplace, settles, and a well-stocked larder door.", paletteNote: "Plaster and oak, turf overhead." },
+  // Captain's Hall — the seat of authority.
+  { buildingTypeId: "captains_hall", cultureId: "gondorian", variantName: "Steward's Hall", description: "A pillared audience hall beneath a banner of the White Tree.", paletteNote: "White ashlar, black-and-silver heraldry." },
+  { buildingTypeId: "captains_hall", cultureId: "rohirric", variantName: "Marshal's Hall", description: "The seat of a Marshal of the Mark, hung with horse-tail standards.", paletteNote: "Timber and gold, green hangings." },
+  { buildingTypeId: "captains_hall", cultureId: "dwarven", variantName: "Lord's Gallery", description: "A throne-gallery of carved stone kings beneath the mountain.", paletteNote: "Granite and gold, axe-and-anvil device." },
+  // Bunkhouse — soldiers' quarters.
+  { buildingTypeId: "bunkhouse", cultureId: "gondorian", variantName: "Garrison Barrack", description: "Stone-built tiered bunks for the Tower Guard.", paletteNote: "Stone brick, slate roof." },
+  { buildingTypeId: "bunkhouse", cultureId: "rohirric", variantName: "Éored Longhouse", description: "A timber sleeping-hall for a riding company.", paletteNote: "Spruce and thatch." },
+  // Granary.
+  { buildingTypeId: "granary", cultureId: "rohirric", variantName: "Stilted Granary", description: "A timber grain-store raised on staddle-stones against the damp.", paletteNote: "Oak frame, thatch cap." },
+  { buildingTypeId: "granary", cultureId: "hobbit", variantName: "Hill Larder", description: "A turf-roofed store dug back into the bank.", paletteNote: "Plaster, turf roof." },
+  // Forge House.
+  { buildingTypeId: "forge_building", cultureId: "dwarven", variantName: "Deep Forge", description: "A roaring stone-hooded forge vented to the mountain's flue.", paletteNote: "Granite, copper hood, gold trim." },
+  { buildingTypeId: "forge_building", cultureId: "isengard", variantName: "Furnace-Pit", description: "An iron furnace sunk into the floor, fed by wheel and bellows.", paletteNote: "Deepslate and iron, lava-lit." },
+  // Chapel / shrine.
+  { buildingTypeId: "chapel", cultureId: "gondorian", variantName: "Hallow", description: "A white domed shrine to the Valar, silent and high.", paletteNote: "Quartz dome, gilded star." },
+  { buildingTypeId: "chapel", cultureId: "haradrim", variantName: "Sun-Shrine", description: "A sandstone shrine to the southern sun, awning-shaded.", paletteNote: "Sandstone, orange awnings." },
+];
+
+// --- Faction → culture mapping (applied as an UPDATE on game.factions) ----
+
+export const factionCultureCatalogue = [
+  { factionId: "gondor", cultureId: "gondorian" },
+  { factionId: "dol_amroth", cultureId: "gondorian" },
+  { factionId: "rohan", cultureId: "rohirric" },
+  { factionId: "erebor", cultureId: "dwarven" },
+  { factionId: "iron_hills", cultureId: "dwarven" },
+  { factionId: "lothlorien", cultureId: "silvan" },
+  { factionId: "rivendell", cultureId: "noldorin" },
+  { factionId: "shire", cultureId: "hobbit" },
+  { factionId: "dale", cultureId: "dalish" },
+  { factionId: "dunland", cultureId: "dunlending" },
+  { factionId: "harad", cultureId: "haradrim" },
+  { factionId: "rhun", cultureId: "easterling" },
+  { factionId: "mordor", cultureId: "mordor" },
+  { factionId: "isengard", cultureId: "isengard" },
 ];
 
 // --- District consumes (tag-based) ---------------------------------------

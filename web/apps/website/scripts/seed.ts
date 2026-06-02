@@ -36,11 +36,17 @@ import {
   factionDistrictRulesCatalogue,
   functionalComponentsCatalogue,
   buildingTypesCatalogue,
+  buildingBuildCostCatalogue,
+  buildingTagsCatalogue,
   districtRequiredBuildingsCatalogue,
   districtRequiredComponentsCatalogue,
   districtFootprintCatalogue,
   decorationCriteriaCatalogue,
   tierDecorationThresholdsCatalogue,
+  culturesCatalogue,
+  culturePalettesCatalogue,
+  buildingVariantsCatalogue,
+  factionCultureCatalogue,
   districtConsumesCatalogue,
   districtProducesCatalogue,
   districtProductionBonusesCatalogue,
@@ -682,6 +688,8 @@ async function main() {
   await db.execute(sqlOp`DELETE FROM config.district_required_components`);
   await db.execute(sqlOp`DELETE FROM config.district_required_buildings`);
   await db.execute(sqlOp`DELETE FROM config.building_provides_components`);
+  await db.execute(sqlOp`DELETE FROM config.building_build_cost`);
+  await db.execute(sqlOp`DELETE FROM config.building_tags`);
 
   for (const fc of functionalComponentsCatalogue) {
     await db
@@ -693,33 +701,78 @@ async function main() {
       });
   }
   for (const b of buildingTypesCatalogue) {
+    const fields = {
+      displayName: b.displayName,
+      description: b.description,
+      category: b.category,
+      tierMin: b.tierMin ?? null,
+      minFootprintBlocks: b.minFootprintBlocks ?? null,
+      maxFootprintBlocks: b.maxFootprintBlocks ?? null,
+      minHeightBlocks: b.minHeightBlocks ?? null,
+      upgradesFrom: b.upgradesFrom ?? null,
+      level: b.level ?? 1,
+    };
     await db
       .insert(schema.buildingTypes)
-      .values({
-        id: b.id,
-        displayName: b.displayName,
-        description: b.description,
-        category: b.category,
-      })
-      .onConflictDoUpdate({
-        target: schema.buildingTypes.id,
-        set: {
-          displayName: b.displayName,
-          description: b.description,
-          category: b.category,
-        },
-      });
+      .values({ id: b.id, ...fields })
+      .onConflictDoUpdate({ target: schema.buildingTypes.id, set: fields });
     for (const comp of b.provides) {
-      await db
-        .insert(schema.buildingProvidesComponents)
-        .values({ buildingTypeId: b.id, componentId: comp });
+      await db.insert(schema.buildingProvidesComponents).values({
+        buildingTypeId: b.id,
+        componentId: comp,
+        quantity: b.quantities?.[comp] ?? 1,
+      });
     }
   }
+  for (const bc of buildingBuildCostCatalogue) {
+    await db.insert(schema.buildingBuildCost).values(bc);
+  }
+  for (const bt of buildingTagsCatalogue) {
+    await db.insert(schema.buildingTags).values(bt);
+  }
   for (const rb of districtRequiredBuildingsCatalogue) {
-    await db.insert(schema.districtRequiredBuildings).values(rb);
+    await db.insert(schema.districtRequiredBuildings).values({
+      districtTypeId: rb.districtTypeId,
+      kind: rb.kind,
+      buildingTypeId: rb.buildingTypeId,
+      count: rb.count,
+      themeNote: rb.themeNote,
+      themeTag: rb.themeTag ?? null,
+      groupKey: rb.groupKey ?? null,
+    });
   }
   for (const rc of districtRequiredComponentsCatalogue) {
     await db.insert(schema.districtRequiredComponents).values(rc);
+  }
+
+  // Cultures + cosmetic building variants + approved palettes.
+  await db.execute(sqlOp`DELETE FROM config.building_variants`);
+  await db.execute(sqlOp`DELETE FROM config.culture_palettes`);
+  for (const c of culturesCatalogue) {
+    await db
+      .insert(schema.cultures)
+      .values(c)
+      .onConflictDoUpdate({
+        target: schema.cultures.id,
+        set: {
+          displayName: c.displayName,
+          description: c.description,
+          parentCultureId: c.parentCultureId,
+        },
+      });
+  }
+  for (const cp of culturePalettesCatalogue) {
+    await db.insert(schema.culturePalettes).values(cp);
+  }
+  for (const bv of buildingVariantsCatalogue) {
+    await db.insert(schema.buildingVariants).values(bv);
+  }
+  // Map each faction onto its culture (UPDATE pass on game.factions).
+  for (const fc of factionCultureCatalogue) {
+    await db
+      .update(schema.factions)
+      .set({ cultureId: fc.cultureId })
+      .where(sqlOp`${schema.factions.id} = ${fc.factionId}`);
   }
 
   // Footprint / height / decoration overrides as an UPDATE pass.

@@ -99,6 +99,27 @@ export default async function DistrictDetailPage({
     reqComponents.length > 0 ||
     district.decorationThreshold != null;
 
+  // Collapse rows sharing a groupKey into a single "any one of" slot,
+  // preserving first-seen order. Standalone rows (null groupKey) stay alone.
+  type ReqBuilding = (typeof reqBuildings)[number];
+  type Slot = { key: string; rows: [ReqBuilding, ...ReqBuilding[]] };
+  const buildingSlots: Slot[] = [];
+  const slotByKey = new Map<string, Slot>();
+  for (const b of reqBuildings) {
+    if (b.groupKey) {
+      const existing = slotByKey.get(b.groupKey);
+      if (existing) {
+        existing.rows.push(b);
+        continue;
+      }
+      const slot: Slot = { key: `g:${b.groupKey}`, rows: [b] };
+      slotByKey.set(b.groupKey, slot);
+      buildingSlots.push(slot);
+    } else {
+      buildingSlots.push({ key: `r:${b.id}`, rows: [b] });
+    }
+  }
+
   const upgradesFrom = district.upgradesFrom
     ? await getDistrictType(district.upgradesFrom)
     : null;
@@ -225,36 +246,88 @@ export default async function DistrictDetailPage({
                 Required buildings
               </p>
               <ul className="text-sm space-y-1.5">
-                {reqBuildings.map((b) => (
-                  <li
-                    key={b.id}
-                    className="flex items-baseline gap-2 flex-wrap"
-                  >
-                    <span className="tabular-nums text-stone-500 w-7">
-                      {b.count}×
-                    </span>
-                    {b.kind === "specific" && b.buildingTypeId ? (
-                      <Link
-                        href={{
-                          pathname: `/buildings`,
-                          hash: b.buildingTypeId,
-                        }}
-                        className="font-medium hover:underline"
+                {buildingSlots.map((slot) => {
+                  // "Any one of" group.
+                  if (slot.rows.length > 1) {
+                    const count = slot.rows[0].count;
+                    return (
+                      <li
+                        key={slot.key}
+                        className="flex items-baseline gap-2 flex-wrap"
                       >
-                        {b.buildingName}
-                      </Link>
-                    ) : (
-                      <span className="font-medium italic">
-                        {b.themeNote ?? "themed building"}
+                        <span className="tabular-nums text-stone-500 w-7">
+                          {count}×
+                        </span>
+                        <span className="flex items-baseline gap-1.5 flex-wrap">
+                          {slot.rows.map((r, i) => (
+                            <span key={r.id} className="flex items-baseline gap-1.5">
+                              {i > 0 && (
+                                <span className="text-xs text-stone-400">
+                                  or
+                                </span>
+                              )}
+                              {r.buildingTypeId ? (
+                                <Link
+                                  href={{
+                                    pathname: `/buildings`,
+                                    hash: r.buildingTypeId,
+                                  }}
+                                  className="font-medium hover:underline"
+                                >
+                                  {r.buildingName}
+                                </Link>
+                              ) : (
+                                <span className="font-medium italic">
+                                  {r.themeNote ?? "themed"}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-400">
+                          any one of
+                        </span>
+                      </li>
+                    );
+                  }
+                  // Single row (specific or themed).
+                  const b = slot.rows[0];
+                  return (
+                    <li
+                      key={slot.key}
+                      className="flex items-baseline gap-2 flex-wrap"
+                    >
+                      <span className="tabular-nums text-stone-500 w-7">
+                        {b.count}×
                       </span>
-                    )}
-                    {b.kind === "themed" && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400">
-                        any matching
-                      </span>
-                    )}
-                  </li>
-                ))}
+                      {b.kind === "specific" && b.buildingTypeId ? (
+                        <Link
+                          href={{
+                            pathname: `/buildings`,
+                            hash: b.buildingTypeId,
+                          }}
+                          className="font-medium hover:underline"
+                        >
+                          {b.buildingName}
+                        </Link>
+                      ) : (
+                        <span className="font-medium italic">
+                          {b.themeNote ?? "themed building"}
+                        </span>
+                      )}
+                      {b.kind === "themed" && (
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400">
+                          any matching
+                        </span>
+                      )}
+                      {b.themeTag && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-900 text-stone-500 font-mono">
+                          {b.themeTag}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

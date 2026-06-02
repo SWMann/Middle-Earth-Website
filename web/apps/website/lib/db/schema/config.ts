@@ -471,8 +471,60 @@ export const buildingTypes = config.table("building_types", {
   description: text("description").notNull().default(""),
   /** 'functional' | 'structural' | 'decorative' | 'landmark'. */
   category: text("category").notNull().default("functional"),
+
+  // --- Intrinsic stats (own identity, independent of the district) ---
+  /** Minimum settlement tier before this building can be raised. NULL = any. */
+  tierMin: text("tier_min"),
+  /** Own ground-area / height envelope. NULL = unconstrained. Mirrors district_types. */
+  minFootprintBlocks: integer("min_footprint_blocks"),
+  maxFootprintBlocks: integer("max_footprint_blocks"),
+  minHeightBlocks: integer("min_height_blocks"),
+
+  // --- Upgrade chain ---
+  /** Self-reference: this building is an upgrade of another (Great Bakehouse ← Bakehouse). */
+  upgradesFrom: text("upgrades_from"),
+  /** Tier in its own upgrade chain. 1 = base. */
+  level: integer("level").notNull().default(1),
+
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
 });
+
+// --- Building: build cost (materials) ------------------------------------
+
+/** Materials to raise one building. Mirrors district_build_cost. */
+export const buildingBuildCost = config.table(
+  "building_build_cost",
+  {
+    buildingTypeId: text("building_type_id")
+      .notNull()
+      .references(() => buildingTypes.id),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => resources.id),
+    amount: integer("amount").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.buildingTypeId, t.resourceId] }),
+  }),
+);
+
+/**
+ * Free-form tags on a building, used to satisfy 'themed' district
+ * requirements verifiably (a row tagged 'theme:bakery' counts toward a
+ * district's "2 bakery-themed buildings" slot). Open enum.
+ */
+export const buildingTags = config.table(
+  "building_tags",
+  {
+    buildingTypeId: text("building_type_id")
+      .notNull()
+      .references(() => buildingTypes.id),
+    tag: text("tag").notNull(), // 'theme:bakery', 'theme:martial', 'mill', ...
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.buildingTypeId, t.tag] }),
+  }),
+);
 
 /**
  * The functional markers the mod verifies exist inside a build: a bed, a
@@ -485,7 +537,11 @@ export const functionalComponents = config.table("functional_components", {
   description: text("description").notNull().default(""),
 });
 
-/** Which components a building inherently provides. */
+/**
+ * Which components a building inherently provides, and HOW MANY. A
+ * Bunkhouse provides 8× BED; a Cottage provides 1. A district's component
+ * requirement is met by summing quantities across the buildings on its plot.
+ */
 export const buildingProvidesComponents = config.table(
   "building_provides_components",
   {
@@ -495,6 +551,7 @@ export const buildingProvidesComponents = config.table(
     componentId: text("component_id")
       .notNull()
       .references(() => functionalComponents.id),
+    quantity: integer("quantity").notNull().default(1),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.buildingTypeId, t.componentId] }),
@@ -505,7 +562,12 @@ export const buildingProvidesComponents = config.table(
  * What buildings a district requires. 'specific' names an exact building;
  * 'themed' requires N buildings matching a theme (the spec's "2x
  * bakery-themed buildings"), in which case buildingTypeId is null and
- * themeNote describes the theme.
+ * themeTag points at a verifiable building_tags value (themeNote is the
+ * human label).
+ *
+ * groupKey turns several rows into an "any one of" slot: rows sharing a
+ * groupKey are alternatives (a mill slot satisfiable by a Flour Mill OR a
+ * Watermill). NULL groupKey = a standalone, individually-required row.
  */
 export const districtRequiredBuildings = config.table(
   "district_required_buildings",
@@ -518,6 +580,10 @@ export const districtRequiredBuildings = config.table(
     buildingTypeId: text("building_type_id").references(() => buildingTypes.id),
     count: integer("count").notNull().default(1),
     themeNote: text("theme_note"),
+    /** For 'themed' rows: the building_tags value that satisfies it. */
+    themeTag: text("theme_tag"),
+    /** Rows sharing a key are mutually-substitutable ("any one of"). */
+    groupKey: text("group_key"),
   },
 );
 
@@ -540,6 +606,70 @@ export const districtRequiredComponents = config.table(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.districtTypeId, t.componentId] }),
+  }),
+);
+
+// --- Cultures & building variants (cosmetic reskins) ---------------------
+
+/**
+ * An architectural culture — the visual identity a group of factions
+ * builds in. Purely cosmetic: cultures change a building's NAME, flavour,
+ * and approved block palette, never its components or district role.
+ * Factions point at a culture via game.factions.culture_id (a soft text
+ * FK; membership is derived by querying that column). parentCultureId
+ * groups related styles (silvan + noldorin under an elven parent).
+ */
+export const cultures = config.table("cultures", {
+  id: text("id").primaryKey(), // 'gondorian', 'rohirric', 'dwarven', ...
+  displayName: text("display_name").notNull(),
+  description: text("description").notNull().default(""),
+  /** Self-reference: a sub-style of a broader culture. NULL = top-level. */
+  parentCultureId: text("parent_culture_id"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+});
+
+/**
+ * A culture's approved block sets, by structural role. This is the data
+ * the decoration criterion 'theme_adherence' scores a build against —
+ * how closely the blocks used match the faction culture's palette.
+ */
+export const culturePalettes = config.table("culture_palettes", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  cultureId: text("culture_id")
+    .notNull()
+    .references(() => cultures.id),
+  /** 'wall' | 'roof' | 'floor' | 'accent' | 'foundation'. */
+  role: text("role").notNull(),
+  /** Approved minecraft block ids for this role. */
+  blocks: jsonb("blocks").$type<string[]>().notNull().default([]),
+  note: text("note").notNull().default(""),
+});
+
+/**
+ * The reskin layer: the same functional building rendered in a culture's
+ * style. A Hearth Hall is a 'Mead Hall' for Rohan and a 'Stone Feast-Hall'
+ * for Gondor — same components, same district role, different name, flavour
+ * and palette. The base building_types row remains the mechanical truth.
+ */
+export const buildingVariants = config.table(
+  "building_variants",
+  {
+    buildingTypeId: text("building_type_id")
+      .notNull()
+      .references(() => buildingTypes.id),
+    cultureId: text("culture_id")
+      .notNull()
+      .references(() => cultures.id),
+    variantName: text("variant_name").notNull(),
+    description: text("description").notNull().default(""),
+    /** Short note on how to dress it in this culture's palette. */
+    paletteNote: text("palette_note").notNull().default(""),
+    /** Optional link to a reference schematic / screenshot. */
+    schematicUrl: text("schematic_url"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.buildingTypeId, t.cultureId] }),
   }),
 );
 
@@ -768,5 +898,10 @@ export type CombatTrait = typeof combatTraits.$inferSelect;
 export type UnitAbility = typeof unitAbilities.$inferSelect;
 export type BuildingType = typeof buildingTypes.$inferSelect;
 export type FunctionalComponent = typeof functionalComponents.$inferSelect;
+export type BuildingBuildCost = typeof buildingBuildCost.$inferSelect;
+export type BuildingTag = typeof buildingTags.$inferSelect;
 export type DecorationCriterion = typeof decorationCriteria.$inferSelect;
 export type TierDecorationThreshold = typeof tierDecorationThresholds.$inferSelect;
+export type Culture = typeof cultures.$inferSelect;
+export type CulturePalette = typeof culturePalettes.$inferSelect;
+export type BuildingVariant = typeof buildingVariants.$inferSelect;
