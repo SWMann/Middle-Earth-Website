@@ -296,8 +296,30 @@ export type DiplomaticState = typeof diplomaticStates.$inferSelect;
 export type NewDiplomaticState = typeof diplomaticStates.$inferInsert;
 export type Region = typeof regions.$inferSelect;
 export type NewRegion = typeof regions.$inferInsert;
+/**
+ * Per-settlement breakdown of population by occupation class. The
+ * settlements.population column remains the headline number; this table
+ * tells you *who* makes it up. Sums of `count` for a settlement should
+ * equal settlements.population — the daily tick is responsible for
+ * keeping them aligned during growth, decline, and class shifts.
+ */
+export const settlementPopulation = game.table(
+  "settlement_population",
+  {
+    settlementId: bigint("settlement_id", { mode: "number" })
+      .notNull()
+      .references(() => settlements.id),
+    classId: text("class_id").notNull(),
+    count: integer("count").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.settlementId, t.classId] }),
+  }),
+);
+
 export type Settlement = typeof settlements.$inferSelect;
 export type NewSettlement = typeof settlements.$inferInsert;
+export type SettlementPopulation = typeof settlementPopulation.$inferSelect;
 export type Character = typeof characters.$inferSelect;
 export type NewCharacter = typeof characters.$inferInsert;
 export type District = typeof districts.$inferSelect;

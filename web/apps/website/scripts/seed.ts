@@ -31,6 +31,8 @@ import {
   districtProducesCatalogue,
   unitTypesCatalogue,
   unitRecruitmentCostCatalogue,
+  occupationClassesCatalogue,
+  POPULATION_COMPOSITION_BY_TIER,
 } from "./catalogue-seed.ts";
 const schema = { ...web, ...game, ...audit, ...configSchema };
 
@@ -572,18 +574,25 @@ async function main() {
   }
 
   for (const d of districtTypesCatalogue) {
+    const row = {
+      ...d,
+      populationCapProvided:
+        "populationCapProvided" in d ? (d.populationCapProvided ?? 0) : 0,
+      metadata: "metadata" in d ? (d.metadata ?? {}) : {},
+    };
     await db
       .insert(schema.districtTypes)
-      .values(d)
+      .values(row)
       .onConflictDoUpdate({
         target: schema.districtTypes.id,
         set: {
-          displayName: d.displayName,
-          category: d.category,
-          tierMin: d.tierMin,
-          popCost: d.popCost,
-          populationCapProvided: d.populationCapProvided ?? 0,
-          description: d.description,
+          displayName: row.displayName,
+          category: row.category,
+          tierMin: row.tierMin,
+          popCost: row.popCost,
+          populationCapProvided: row.populationCapProvided,
+          description: row.description,
+          metadata: row.metadata,
         },
       });
   }
@@ -626,6 +635,21 @@ async function main() {
   await db.execute(sqlOp`DELETE FROM config.unit_recruitment_cost`);
   for (const urc of unitRecruitmentCostCatalogue) {
     await db.insert(schema.unitRecruitmentCost).values(urc);
+  }
+
+  for (const oc of occupationClassesCatalogue) {
+    await db
+      .insert(schema.occupationClasses)
+      .values(oc)
+      .onConflictDoUpdate({
+        target: schema.occupationClasses.id,
+        set: {
+          displayName: oc.displayName,
+          description: oc.description,
+          rank: oc.rank,
+          metadata: oc.metadata,
+        },
+      });
   }
 
   console.log("Seeding regions and claims…");
@@ -683,6 +707,38 @@ async function main() {
       centreX: s.centreX,
       centreZ: s.centreZ,
     });
+  }
+
+  console.log("Seeding settlement population breakdown…");
+  // For each settlement, distribute its `population` across occupation
+  // classes per the tier's composition. Round to ints; absorb rounding
+  // remainder into peasants so the total exactly matches.
+  await db.execute(sqlOp`DELETE FROM game.settlement_population`);
+  const settlementRows = await db.select().from(schema.settlements);
+  for (const s of settlementRows) {
+    const composition: Record<string, number> =
+      POPULATION_COMPOSITION_BY_TIER[s.tier] ??
+      POPULATION_COMPOSITION_BY_TIER.village!;
+    const counts: Record<string, number> = {};
+    let allocated = 0;
+    for (const classId of Object.keys(composition)) {
+      if (classId === "peasant") continue;
+      const pct = composition[classId]!;
+      const c = Math.round((pct / 100) * s.population);
+      counts[classId] = c;
+      allocated += c;
+    }
+    counts.peasant = Math.max(0, s.population - allocated);
+    for (const classId of Object.keys(counts)) {
+      const count = counts[classId]!;
+      if (count > 0) {
+        await db.insert(schema.settlementPopulation).values({
+          settlementId: s.id,
+          classId,
+          count,
+        });
+      }
+    }
   }
 
   console.log("Seeding audit events…");

@@ -162,7 +162,28 @@ export const unitRecruitmentCost = config.table(
   }),
 );
 
+// --- Occupation classes --------------------------------------------------
+
+/**
+ * Catalogue of population classes. Settlements track their composition
+ * as counts per class (game.settlement_population). Classes carry
+ * mechanical hints in metadata: military_potential (how readily
+ * mobilisable as soldiers), tax_yield_per_capita (relative wealth),
+ * food_cost_per_capita (some classes eat more), social_weight (council
+ * influence). The mod reads these to compute taxation, conscription,
+ * and food balance during the daily tick.
+ */
+export const occupationClasses = config.table("occupation_classes", {
+  id: text("id").primaryKey(), // 'peasant', 'artisan', 'soldier', ...
+  displayName: text("display_name").notNull(),
+  description: text("description").notNull().default(""),
+  /** UI hint: a short single word like 'common', 'skilled', 'martial', 'elite'. */
+  rank: text("rank").notNull().default("common"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+});
+
 export type Resource = typeof resources.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type DistrictType = typeof districtTypes.$inferSelect;
 export type UnitType = typeof unitTypes.$inferSelect;
+export type OccupationClass = typeof occupationClasses.$inferSelect;

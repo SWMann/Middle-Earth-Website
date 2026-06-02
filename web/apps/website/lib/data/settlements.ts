@@ -45,6 +45,22 @@ export const getDistrictsAtSettlement = cache(async (settlementId: number) => {
     .orderBy(schema.districts.category, schema.districts.districtType);
 });
 
+export const getPopulationBreakdown = cache(async (settlementId: number) => {
+  return await db
+    .select({
+      classId: schema.settlementPopulation.classId,
+      className: schema.occupationClasses.displayName,
+      rank: schema.occupationClasses.rank,
+      count: schema.settlementPopulation.count,
+    })
+    .from(schema.settlementPopulation)
+    .innerJoin(
+      schema.occupationClasses,
+      eq(schema.settlementPopulation.classId, schema.occupationClasses.id),
+    )
+    .where(eq(schema.settlementPopulation.settlementId, settlementId));
+});
+
 export const getUnitsGarrisonedAt = cache(async (settlementId: number) => {
   return await db
     .select()

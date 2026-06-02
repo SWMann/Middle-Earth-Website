@@ -181,6 +181,108 @@ export const districtTypesCatalogue = [
     description:
       "Quarters for trained soldiers. Required at the settlement to recruit T:Warrior class units.",
   },
+  // Defensive (walls) — mechanics_spec.md §5.5
+  // metadata carries the wall-specific stats: defense_bonus_pct,
+  // delay_of_engagement_hours, breach_difficulty, max_per_settlement
+  {
+    id: "basic_palisade",
+    displayName: "Basic Palisade",
+    category: "defensive",
+    tierMin: "village",
+    popCost: 0,
+    description:
+      "Sharpened logs driven into an earthen bank. Slows a charge, breaks under fire.",
+    metadata: {
+      defense_bonus_pct: 10,
+      delay_of_engagement_hours: 24,
+      breach_difficulty: "easy",
+      breach_requires: ["any_ram", "fire"],
+    },
+  },
+  {
+    id: "advanced_palisade",
+    displayName: "Advanced Palisade",
+    category: "defensive",
+    tierMin: "burgh",
+    popCost: 0,
+    description:
+      "Doubled timber with a fighting platform. Buys real time but still wood.",
+    metadata: {
+      defense_bonus_pct: 20,
+      delay_of_engagement_hours: 48,
+      breach_difficulty: "easy",
+      breach_requires: ["ram", "tower"],
+    },
+  },
+  {
+    id: "basic_stone_wall",
+    displayName: "Basic Stone Wall",
+    category: "defensive",
+    tierMin: "town",
+    popCost: 0,
+    description:
+      "Mortared stone, half a man-height thick. Archer cover; rams must work for it.",
+    metadata: {
+      defense_bonus_pct: 30,
+      delay_of_engagement_hours: 72,
+      breach_difficulty: "moderate",
+      breach_requires: ["heavy_ram", "sustained_siege"],
+      archer_cover: true,
+    },
+  },
+  {
+    id: "advanced_stone_wall",
+    displayName: "Advanced Stone Wall",
+    category: "defensive",
+    tierMin: "city",
+    popCost: 0,
+    description:
+      "Crenellated walls with archer towers and a sally port. The standard of cities.",
+    metadata: {
+      defense_bonus_pct: 40,
+      delay_of_engagement_hours: 120,
+      breach_difficulty: "hard",
+      breach_requires: ["heavy_ram", "breach_charges"],
+      archer_cover: true,
+      ranged_retaliation: true,
+    },
+  },
+  {
+    id: "citadel_walls",
+    displayName: "Citadel Walls",
+    category: "defensive",
+    tierMin: "great_city",
+    popCost: 0,
+    description:
+      "Layered defences with inner keeps. A second wave of defenders forms behind the first.",
+    metadata: {
+      defense_bonus_pct: 50,
+      delay_of_engagement_hours: 168,
+      breach_difficulty: "very_hard",
+      breach_requires: ["multiple_siege_engines", "days_of_effort"],
+      archer_cover: true,
+      ranged_retaliation: true,
+      defender_waves: 1,
+    },
+  },
+  {
+    id: "capital_walls",
+    displayName: "Capital Walls",
+    category: "defensive",
+    tierMin: "capital",
+    popCost: 0,
+    description:
+      "The work of an age. Anorien-grade masonry, mithril-bound gates, two reserve garrisons. Only capitals.",
+    metadata: {
+      defense_bonus_pct: 60,
+      delay_of_engagement_hours: 240,
+      breach_difficulty: "extreme",
+      breach_requires: ["specialised_siege_engineering"],
+      archer_cover: true,
+      ranged_retaliation: true,
+      defender_waves: 2,
+    },
+  },
 ];
 
 // --- District consumes (tag-based) ---------------------------------------
@@ -327,6 +429,113 @@ export const unitTypesCatalogue = [
 ];
 
 // --- Unit recruitment material costs -------------------------------------
+
+// --- Population composition by tier --------------------------------------
+
+/**
+ * Default composition % per settlement tier. The seed loops every
+ * settlement and applies the composition for its tier, rounded to
+ * integers; any rounding remainder absorbs into the peasant class so
+ * the total always matches the settlement's population number.
+ *
+ * Percentages sum to 100 for each tier.
+ */
+export const POPULATION_COMPOSITION_BY_TIER: Record<
+  string,
+  { peasant: number; artisan: number; merchant: number; soldier: number; scholar: number; noble: number }
+> = {
+  hamlet:     { peasant: 88, artisan:  6, merchant: 2, soldier:  3, scholar: 1, noble: 0 },
+  steading:   { peasant: 82, artisan: 10, merchant: 3, soldier:  4, scholar: 1, noble: 0 },
+  village:    { peasant: 75, artisan: 13, merchant: 4, soldier:  5, scholar: 2, noble: 1 },
+  burgh:      { peasant: 65, artisan: 16, merchant: 6, soldier:  8, scholar: 3, noble: 2 },
+  town:       { peasant: 55, artisan: 18, merchant: 8, soldier: 11, scholar: 5, noble: 3 },
+  city:       { peasant: 50, artisan: 18, merchant: 9, soldier: 14, scholar: 6, noble: 3 },
+  great_city: { peasant: 45, artisan: 18, merchant: 10, soldier: 16, scholar: 7, noble: 4 },
+  capital:    { peasant: 42, artisan: 18, merchant: 11, soldier: 16, scholar: 7, noble: 6 },
+};
+
+// --- Occupation classes --------------------------------------------------
+
+export const occupationClassesCatalogue = [
+  {
+    id: "peasant",
+    displayName: "Peasant",
+    rank: "common",
+    description:
+      "Farmers, herders, day-labourers. The broad base of every settlement; produce most of the food and provide levy soldiers in emergencies.",
+    metadata: {
+      military_potential: 0.4,
+      tax_yield_per_capita: 1,
+      food_cost_per_capita: 1,
+      social_weight: 1,
+    },
+  },
+  {
+    id: "artisan",
+    displayName: "Artisan",
+    rank: "skilled",
+    description:
+      "Smiths, weavers, masons, carpenters. Convert raw materials into finished goods. Town backbone.",
+    metadata: {
+      military_potential: 0.2,
+      tax_yield_per_capita: 3,
+      food_cost_per_capita: 1,
+      social_weight: 2,
+    },
+  },
+  {
+    id: "merchant",
+    displayName: "Merchant",
+    rank: "skilled",
+    description:
+      "Traders, shopkeepers, caravan masters. Move goods between settlements; collected tolls fund the treasury.",
+    metadata: {
+      military_potential: 0.1,
+      tax_yield_per_capita: 5,
+      food_cost_per_capita: 1,
+      social_weight: 3,
+    },
+  },
+  {
+    id: "soldier",
+    displayName: "Soldier",
+    rank: "martial",
+    description:
+      "Garrisoned regulars and standing-army types — distinct from peasant levies. Already in arms; mobilising them doesn't cost morale.",
+    metadata: {
+      military_potential: 1.0,
+      tax_yield_per_capita: 0,
+      food_cost_per_capita: 2,
+      social_weight: 2,
+    },
+  },
+  {
+    id: "scholar",
+    displayName: "Scholar",
+    rank: "skilled",
+    description:
+      "Scribes, clerics, lore-keepers, healers. Generate the DP from libraries and councils; staff Healing Houses.",
+    metadata: {
+      military_potential: 0.05,
+      tax_yield_per_capita: 1,
+      food_cost_per_capita: 1,
+      social_weight: 4,
+    },
+  },
+  {
+    id: "noble",
+    displayName: "Noble",
+    rank: "elite",
+    description:
+      "Landed gentry, marshals, court officers. Few but high-status; shape council weight and faction leadership succession.",
+    metadata: {
+      military_potential: 0.3,
+      tax_yield_per_capita: 8,
+      food_cost_per_capita: 2,
+      social_weight: 8,
+    },
+  },
+];
 
 export const unitRecruitmentCostCatalogue = [
   // levy_spearman: no resource cost (coin only)

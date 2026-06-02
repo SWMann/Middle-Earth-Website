@@ -84,6 +84,8 @@ export default async function DistrictDetailPage({
         </dl>
       </section>
 
+      <WallMetadata district={district} />
+
       {consumesWithResources.length > 0 && (
         <section>
           <h2 className="text-lg font-semibold mb-3">Consumes daily</h2>
@@ -160,6 +162,83 @@ export default async function DistrictDetailPage({
       )}
     </div>
   );
+}
+
+/**
+ * Render category-specific metadata. Wall districts carry defense_bonus_pct,
+ * delay_of_engagement_hours, breach_difficulty, etc — surfacing them in
+ * the UI makes the wall-tier ladder readable at a glance. Other categories
+ * silently render nothing.
+ */
+function WallMetadata({
+  district,
+}: {
+  district: { category: string; metadata: unknown };
+}) {
+  if (district.category !== "defensive") return null;
+  const m = (district.metadata ?? {}) as Record<string, unknown>;
+  const defense = typeof m.defense_bonus_pct === "number" ? m.defense_bonus_pct : null;
+  const delayH =
+    typeof m.delay_of_engagement_hours === "number"
+      ? m.delay_of_engagement_hours
+      : null;
+  const breach =
+    typeof m.breach_difficulty === "string" ? m.breach_difficulty : null;
+  const requires = Array.isArray(m.breach_requires)
+    ? (m.breach_requires as string[])
+    : [];
+  const archerCover = m.archer_cover === true;
+  const rangedRetaliation = m.ranged_retaliation === true;
+  const defenderWaves =
+    typeof m.defender_waves === "number" ? m.defender_waves : 0;
+
+  return (
+    <section>
+      <h2 className="text-lg font-semibold mb-3">Wall properties</h2>
+      <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        {defense !== null && (
+          <Stat label="Defense bonus" value={`+${defense}%`} />
+        )}
+        {delayH !== null && (
+          <Stat
+            label="Delay of engagement"
+            value={
+              delayH >= 24
+                ? `${Math.round(delayH / 24)} day${delayH >= 48 ? "s" : ""}`
+                : `${delayH} h`
+            }
+          />
+        )}
+        {breach && <Stat label="Breach" value={prettyTerm(breach)} />}
+      </dl>
+      {(archerCover || rangedRetaliation || defenderWaves > 0) && (
+        <ul className="text-sm mt-4 space-y-1 opacity-80">
+          {archerCover && <li>• Archer cover from the parapet</li>}
+          {rangedRetaliation && (
+            <li>• Defender ranged retaliation while breach attempts continue</li>
+          )}
+          {defenderWaves > 0 && (
+            <li>
+              • {defenderWaves} reserve garrison{defenderWaves === 1 ? "" : "s"} held back as fallback wave{defenderWaves === 1 ? "" : "s"}
+            </li>
+          )}
+        </ul>
+      )}
+      {requires.length > 0 && (
+        <p className="text-xs opacity-60 mt-4">
+          Breach requires:{" "}
+          {requires.map((r) => prettyTerm(r)).join(", ")}.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function prettyTerm(s: string): string {
+  return s
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

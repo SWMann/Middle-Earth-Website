@@ -6,6 +6,7 @@ import {
   getSiblingSettlements,
   getDistrictsAtSettlement,
   getUnitsGarrisonedAt,
+  getPopulationBreakdown,
 } from "@/lib/data/settlements";
 import { getFaction } from "@/lib/data/factions";
 import { getRegion } from "@/lib/data/regions";
@@ -57,13 +58,14 @@ export default async function SettlementDetailPage({
   const s = await getSettlement(numericId);
   if (!s) notFound();
 
-  const [faction, region, siblings, districts, garrison, events] = await Promise.all([
+  const [faction, region, siblings, districts, garrison, events, popBreakdown] = await Promise.all([
     getFaction(s.factionId),
     getRegion(s.regionId),
     getSiblingSettlements(s.factionId, s.id),
     getDistrictsAtSettlement(s.id),
     getUnitsGarrisonedAt(s.id),
     getRecentEvents({ visibility: ["public"], factionId: s.factionId, touching: true, limit: 6 }),
+    getPopulationBreakdown(s.id),
   ]);
 
   const garrisonTotal = garrison.reduce((sum, u) => sum + u.count, 0);
@@ -179,6 +181,22 @@ export default async function SettlementDetailPage({
         </div>
       </section>
 
+      {/* ----- Population composition ----- */}
+      {popBreakdown.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-4">
+            Population by class
+            <span className="ml-2 text-xs text-stone-500 font-normal tabular-nums">
+              {s.population} total
+            </span>
+          </h2>
+          <PopulationBars
+            breakdown={popBreakdown}
+            total={s.population}
+          />
+        </section>
+      )}
+
       {/* ----- Garrison ----- */}
       <section>
         <h2 className="text-lg font-semibold mb-4">
@@ -220,6 +238,74 @@ export default async function SettlementDetailPage({
           empty="No recent activity from this faction."
         />
       </section>
+    </div>
+  );
+}
+
+// Rank → bar colour. Common → grey, skilled → blue, martial → red,
+// elite → amber. Tailwind class strings (not utility palette lookup)
+// because the rendered colours need to survive class purging.
+const RANK_BAR_COLOR: Record<string, string> = {
+  common: "bg-stone-400 dark:bg-stone-500",
+  skilled: "bg-sky-500 dark:bg-sky-600",
+  martial: "bg-rose-500 dark:bg-rose-600",
+  elite: "bg-amber-500 dark:bg-amber-600",
+};
+
+function PopulationBars({
+  breakdown,
+  total,
+}: {
+  breakdown: {
+    classId: string;
+    className: string;
+    rank: string;
+    count: number;
+  }[];
+  total: number;
+}) {
+  // Order: peasant first (always biggest), then by count descending.
+  const sorted = [...breakdown].sort((a, b) => {
+    if (a.classId === "peasant") return -1;
+    if (b.classId === "peasant") return 1;
+    return b.count - a.count;
+  });
+  return (
+    <div className="space-y-2">
+      <div className="flex w-full h-4 rounded overflow-hidden border border-stone-200 dark:border-stone-800">
+        {sorted.map((row) => {
+          const pct = (row.count / total) * 100;
+          return (
+            <div
+              key={row.classId}
+              className={RANK_BAR_COLOR[row.rank] ?? "bg-stone-400"}
+              style={{ width: `${pct}%` }}
+              title={`${row.className}: ${row.count}`}
+            />
+          );
+        })}
+      </div>
+      <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+        {sorted.map((row) => {
+          const pct = ((row.count / total) * 100).toFixed(1);
+          return (
+            <li
+              key={row.classId}
+              className="flex items-baseline gap-2 border-b border-stone-100 dark:border-stone-900 py-1"
+            >
+              <span
+                aria-hidden
+                className={`inline-block h-2 w-2 rounded-sm ${RANK_BAR_COLOR[row.rank] ?? "bg-stone-400"}`}
+              />
+              <span>{row.className}</span>
+              <span className="ml-auto text-xs text-stone-500 tabular-nums">
+                {row.count.toLocaleString()}{" "}
+                <span className="opacity-60">· {pct}%</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
