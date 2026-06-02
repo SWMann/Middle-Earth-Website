@@ -27,6 +27,13 @@ import {
   resourcesCatalogue,
   resourceTagMappings,
   districtTypesCatalogue,
+  districtBuildCostCatalogue,
+  districtStaffingCatalogue,
+  districtEffectsCatalogue,
+  districtBiomeOutputsCatalogue,
+  districtPrerequisitesCatalogue,
+  districtAdjacencyBonusesCatalogue,
+  factionDistrictRulesCatalogue,
   districtConsumesCatalogue,
   districtProducesCatalogue,
   unitTypesCatalogue,
@@ -575,10 +582,25 @@ async function main() {
 
   for (const d of districtTypesCatalogue) {
     const row = {
-      ...d,
-      populationCapProvided:
-        "populationCapProvided" in d ? (d.populationCapProvided ?? 0) : 0,
-      metadata: "metadata" in d ? (d.metadata ?? {}) : {},
+      id: d.id,
+      displayName: d.displayName,
+      category: d.category,
+      tierMin: d.tierMin,
+      popCost: d.popCost ?? 0,
+      populationCapProvided: d.populationCapProvided ?? 0,
+      description: d.description,
+      buildCoinCost: d.buildCoinCost ?? 0,
+      buildDpCost: d.buildDpCost ?? 0,
+      buildTimeDays: d.buildTimeDays ?? 0,
+      upkeepCoinDaily: d.upkeepCoinDaily ?? 0,
+      requiredBiomes: d.requiredBiomes ?? null,
+      requiresDiscovery: d.requiresDiscovery ?? null,
+      terrainRequirement: d.terrainRequirement ?? null,
+      maxPerSettlement: d.maxPerSettlement ?? null,
+      uniqueScope: d.uniqueScope ?? null,
+      mandatoryAtTier: d.mandatoryAtTier ?? null,
+      upgradesFrom: d.upgradesFrom ?? null,
+      metadata: d.metadata ?? {},
     };
     await db
       .insert(schema.districtTypes)
@@ -592,9 +614,50 @@ async function main() {
           popCost: row.popCost,
           populationCapProvided: row.populationCapProvided,
           description: row.description,
+          buildCoinCost: row.buildCoinCost,
+          buildDpCost: row.buildDpCost,
+          buildTimeDays: row.buildTimeDays,
+          upkeepCoinDaily: row.upkeepCoinDaily,
+          requiredBiomes: row.requiredBiomes,
+          requiresDiscovery: row.requiresDiscovery,
+          terrainRequirement: row.terrainRequirement,
+          maxPerSettlement: row.maxPerSettlement,
+          uniqueScope: row.uniqueScope,
+          mandatoryAtTier: row.mandatoryAtTier,
+          upgradesFrom: row.upgradesFrom,
           metadata: row.metadata,
         },
       });
+  }
+
+  // New district-relation tables: wipe + reinsert (small, deterministic).
+  await db.execute(sqlOp`DELETE FROM config.district_build_cost`);
+  for (const r of districtBuildCostCatalogue) {
+    await db.insert(schema.districtBuildCost).values(r);
+  }
+  await db.execute(sqlOp`DELETE FROM config.district_staffing`);
+  for (const r of districtStaffingCatalogue) {
+    await db.insert(schema.districtStaffing).values(r);
+  }
+  await db.execute(sqlOp`DELETE FROM config.district_effects`);
+  for (const r of districtEffectsCatalogue) {
+    await db.insert(schema.districtEffects).values(r);
+  }
+  await db.execute(sqlOp`DELETE FROM config.district_biome_outputs`);
+  for (const r of districtBiomeOutputsCatalogue) {
+    await db.insert(schema.districtBiomeOutputs).values(r);
+  }
+  await db.execute(sqlOp`DELETE FROM config.district_prerequisites`);
+  for (const r of districtPrerequisitesCatalogue) {
+    await db.insert(schema.districtPrerequisites).values(r);
+  }
+  await db.execute(sqlOp`DELETE FROM config.district_adjacency_bonuses`);
+  for (const r of districtAdjacencyBonusesCatalogue) {
+    await db.insert(schema.districtAdjacencyBonuses).values(r);
+  }
+  await db.execute(sqlOp`DELETE FROM config.faction_district_rules`);
+  for (const r of factionDistrictRulesCatalogue) {
+    await db.insert(schema.factionDistrictRules).values(r);
   }
 
   await db.execute(sqlOp`DELETE FROM config.district_consumes`);
@@ -693,6 +756,7 @@ async function main() {
   // we don't have a constraint for. Strategy: delete-and-reinsert keyed on
   // (name, regionId). Simpler than tracking IDs across runs at this scale.
   // Delete child rows first to satisfy FKs.
+  await db.execute(sqlOp`DELETE FROM game.settlement_population`);
   await db.execute(sqlOp`DELETE FROM game.units WHERE garrisoned_at IS NOT NULL`);
   await db.execute(sqlOp`DELETE FROM game.districts`);
   await db.execute(sqlOp`DELETE FROM game.settlements`);

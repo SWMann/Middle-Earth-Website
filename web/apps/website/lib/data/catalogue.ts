@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 
 // --- Resources ------------------------------------------------------------
@@ -150,6 +150,126 @@ export const getDistrictProduces = cache(async (districtTypeId: string) => {
     )
     .where(eq(schema.districtProduces.districtTypeId, districtTypeId));
 });
+
+export const getDistrictBuildCost = cache(async (districtTypeId: string) => {
+  return await db
+    .select({
+      resourceId: schema.districtBuildCost.resourceId,
+      resourceName: schema.resources.displayName,
+      amount: schema.districtBuildCost.amount,
+    })
+    .from(schema.districtBuildCost)
+    .innerJoin(
+      schema.resources,
+      eq(schema.districtBuildCost.resourceId, schema.resources.id),
+    )
+    .where(eq(schema.districtBuildCost.districtTypeId, districtTypeId));
+});
+
+export const getDistrictStaffing = cache(async (districtTypeId: string) => {
+  return await db
+    .select({
+      classId: schema.districtStaffing.classId,
+      className: schema.occupationClasses.displayName,
+      rank: schema.occupationClasses.rank,
+      count: schema.districtStaffing.count,
+    })
+    .from(schema.districtStaffing)
+    .innerJoin(
+      schema.occupationClasses,
+      eq(schema.districtStaffing.classId, schema.occupationClasses.id),
+    )
+    .where(eq(schema.districtStaffing.districtTypeId, districtTypeId));
+});
+
+export const getDistrictEffects = cache(async (districtTypeId: string) => {
+  return await db
+    .select()
+    .from(schema.districtEffects)
+    .where(eq(schema.districtEffects.districtTypeId, districtTypeId));
+});
+
+export const getDistrictBiomeOutputs = cache(async (districtTypeId: string) => {
+  return await db
+    .select({
+      biome: schema.districtBiomeOutputs.biome,
+      resourceId: schema.districtBiomeOutputs.resourceId,
+      resourceName: schema.resources.displayName,
+      dailyAmount: schema.districtBiomeOutputs.dailyAmount,
+    })
+    .from(schema.districtBiomeOutputs)
+    .innerJoin(
+      schema.resources,
+      eq(schema.districtBiomeOutputs.resourceId, schema.resources.id),
+    )
+    .where(eq(schema.districtBiomeOutputs.districtTypeId, districtTypeId))
+    .orderBy(desc(schema.districtBiomeOutputs.dailyAmount));
+});
+
+/** Districts that must exist before this one can be built. */
+export const getDistrictPrerequisites = cache(async (districtTypeId: string) => {
+  return await db
+    .select({
+      id: schema.districtTypes.id,
+      displayName: schema.districtTypes.displayName,
+    })
+    .from(schema.districtPrerequisites)
+    .innerJoin(
+      schema.districtTypes,
+      eq(
+        schema.districtPrerequisites.prerequisiteDistrictTypeId,
+        schema.districtTypes.id,
+      ),
+    )
+    .where(eq(schema.districtPrerequisites.districtTypeId, districtTypeId));
+});
+
+/** What upgrades into this district (children) — the inverse of upgradesFrom. */
+export const getDistrictUpgradeTargets = cache(async (districtTypeId: string) => {
+  return await db
+    .select({
+      id: schema.districtTypes.id,
+      displayName: schema.districtTypes.displayName,
+    })
+    .from(schema.districtTypes)
+    .where(eq(schema.districtTypes.upgradesFrom, districtTypeId));
+});
+
+export const getDistrictAdjacencyBonuses = cache(
+  async (districtTypeId: string) => {
+    return await db
+      .select({
+        adjacentId: schema.districtTypes.id,
+        adjacentName: schema.districtTypes.displayName,
+        bonusType: schema.districtAdjacencyBonuses.bonusType,
+        bonusValue: schema.districtAdjacencyBonuses.bonusValue,
+      })
+      .from(schema.districtAdjacencyBonuses)
+      .innerJoin(
+        schema.districtTypes,
+        eq(
+          schema.districtAdjacencyBonuses.adjacentDistrictTypeId,
+          schema.districtTypes.id,
+        ),
+      )
+      .where(eq(schema.districtAdjacencyBonuses.districtTypeId, districtTypeId));
+  },
+);
+
+/** Per-faction rules affecting this district (restrict/unlock/override/modify). */
+export const getFactionRulesForDistrict = cache(
+  async (districtTypeId: string) => {
+    // Match rules where this district is the subject OR the override target.
+    return await db
+      .select()
+      .from(schema.factionDistrictRules)
+      .where(
+        or(
+          eq(schema.factionDistrictRules.districtTypeId, districtTypeId),
+        ),
+      );
+  },
+);
 
 // --- Unit types --------------------------------------------------------
 

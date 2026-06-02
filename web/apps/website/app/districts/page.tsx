@@ -74,11 +74,32 @@ export default async function DistrictsIndexPage() {
                     </span>
                     <span className="ml-auto text-xs text-stone-500 tabular-nums">
                       tier {d.tierMin}+ · pop {d.popCost}
-                      {d.populationCapProvided > 0 && (
-                        <> · cap +{d.populationCapProvided}</>
-                      )}
+                      {d.buildCoinCost > 0 && <> · {d.buildCoinCost}c</>}
+                      {d.buildDpCost > 0 && <> · {d.buildDpCost}dp</>}
                     </span>
                   </div>
+                  {(d.requiredBiomes || d.requiresDiscovery || d.terrainRequirement) && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {d.requiredBiomes?.map((b) => (
+                        <span
+                          key={b}
+                          className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-900 text-stone-500"
+                        >
+                          {b}
+                        </span>
+                      ))}
+                      {d.terrainRequirement && (
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-400">
+                          {d.terrainRequirement}
+                        </span>
+                      )}
+                      {d.requiresDiscovery && (
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400">
+                          needs {d.requiresDiscovery}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {d.description && (
                     <p className="text-sm opacity-70 mt-2">{d.description}</p>
                   )}
