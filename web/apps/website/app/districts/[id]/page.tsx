@@ -17,6 +17,9 @@ import {
   getDistrictProductionBonuses,
   getDistrictTierOutput,
   getDistrictRecipes,
+  getDistrictRequiredBuildings,
+  getDistrictRequiredComponents,
+  getTierDecorationThresholds,
 } from "@/lib/data/catalogue";
 import { getFaction } from "@/lib/data/factions";
 import { FactionTag } from "@/components/tags/faction-tag";
@@ -60,6 +63,9 @@ export default async function DistrictDetailPage({
     productionBonuses,
     tierOutput,
     recipes,
+    reqBuildings,
+    reqComponents,
+    tierThresholds,
   ] = await Promise.all([
     getDistrictConsumes(district.id),
     getDistrictProduces(district.id),
@@ -74,7 +80,24 @@ export default async function DistrictDetailPage({
     getDistrictProductionBonuses(district.id),
     getDistrictTierOutput(district.id),
     getDistrictRecipes(district.id),
+    getDistrictRequiredBuildings(district.id),
+    getDistrictRequiredComponents(district.id),
+    getTierDecorationThresholds(),
   ]);
+
+  const decoThreshold =
+    district.decorationThreshold != null
+      ? tierThresholds.find((t) => t.minScore === district.decorationThreshold)
+      : null;
+  const hasFootprint =
+    district.minFootprintBlocks != null ||
+    district.maxFootprintBlocks != null ||
+    district.minHeightBlocks != null;
+  const hasConstruction =
+    hasFootprint ||
+    reqBuildings.length > 0 ||
+    reqComponents.length > 0 ||
+    district.decorationThreshold != null;
 
   const upgradesFrom = district.upgradesFrom
     ? await getDistrictType(district.upgradesFrom)
@@ -157,6 +180,133 @@ export default async function DistrictDetailPage({
           </div>
         )}
       </section>
+
+      {/* ----- Construction requirements ----- */}
+      {hasConstruction && (
+        <section>
+          <h2 className="text-lg font-semibold mb-1">
+            Construction requirements
+          </h2>
+          <p className="text-xs opacity-60 mb-4 max-w-2xl">
+            What a player must physically build for this district to count as
+            complete and start producing. The plot is graded against these once
+            and on every later edit.
+          </p>
+
+          {hasFootprint && (
+            <div className="mb-5">
+              <p className="text-xs uppercase tracking-widest opacity-60 mb-2">
+                Footprint
+              </p>
+              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-sm">
+                {(district.minFootprintBlocks != null ||
+                  district.maxFootprintBlocks != null) && (
+                  <Stat
+                    label="Floor area"
+                    value={footprintRange(
+                      district.minFootprintBlocks,
+                      district.maxFootprintBlocks,
+                    )}
+                  />
+                )}
+                {district.minHeightBlocks != null && (
+                  <Stat
+                    label="Min height"
+                    value={`${district.minHeightBlocks} blk`}
+                  />
+                )}
+              </dl>
+            </div>
+          )}
+
+          {reqBuildings.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs uppercase tracking-widest opacity-60 mb-2">
+                Required buildings
+              </p>
+              <ul className="text-sm space-y-1.5">
+                {reqBuildings.map((b) => (
+                  <li
+                    key={b.id}
+                    className="flex items-baseline gap-2 flex-wrap"
+                  >
+                    <span className="tabular-nums text-stone-500 w-7">
+                      {b.count}×
+                    </span>
+                    {b.kind === "specific" && b.buildingTypeId ? (
+                      <Link
+                        href={{
+                          pathname: `/buildings`,
+                          hash: b.buildingTypeId,
+                        }}
+                        className="font-medium hover:underline"
+                      >
+                        {b.buildingName}
+                      </Link>
+                    ) : (
+                      <span className="font-medium italic">
+                        {b.themeNote ?? "themed building"}
+                      </span>
+                    )}
+                    {b.kind === "themed" && (
+                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400">
+                        any matching
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {reqComponents.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs uppercase tracking-widest opacity-60 mb-2">
+                Required components
+              </p>
+              <p className="text-[11px] opacity-50 mb-2 max-w-xl">
+                Functional fittings the buildings must collectively provide —
+                regardless of which building supplies them.
+              </p>
+              <ul className="text-sm flex flex-wrap gap-x-4 gap-y-1.5">
+                {reqComponents.map((c) => (
+                  <li key={c.componentId} className="flex items-baseline gap-1.5">
+                    <span className="tabular-nums text-stone-500">
+                      {c.count}×
+                    </span>
+                    <span className="font-medium">{c.componentName}</span>
+                    {c.perCap && (
+                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-900 text-stone-500">
+                        per pop cap
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {district.decorationThreshold != null && (
+            <div className="rounded border border-stone-200 dark:border-stone-800 p-3 text-sm flex items-baseline gap-3 flex-wrap">
+              <span className="opacity-70">Decoration quality gate</span>
+              <span className="font-semibold tabular-nums">
+                ≥ {district.decorationThreshold}/100
+              </span>
+              {decoThreshold && (
+                <span className="text-xs text-stone-500">
+                  {reviewModeLabel(decoThreshold.reviewMode)}
+                </span>
+              )}
+              <Link
+                href={{ pathname: "/decoration" }}
+                className="ml-auto text-xs hover:underline opacity-70"
+              >
+                How scoring works →
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ----- Location & limits ----- */}
       {(district.requiredBiomes ||
@@ -679,6 +829,29 @@ function prettyTerm(s: string): string {
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+function footprintRange(
+  min: number | null,
+  max: number | null,
+): string {
+  if (min != null && max != null) return `${min}–${max} blk²`;
+  if (min != null) return `≥ ${min} blk²`;
+  if (max != null) return `≤ ${max} blk²`;
+  return "—";
+}
+
+function reviewModeLabel(mode: string): string {
+  switch (mode) {
+    case "light":
+      return "auto-scored (light review)";
+    case "spot":
+      return "auto-scored + spot review";
+    case "full":
+      return "staff review required";
+    default:
+      return prettyTerm(mode);
+  }
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

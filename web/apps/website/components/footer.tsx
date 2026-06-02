@@ -32,8 +32,14 @@ export function Footer() {
           <Link href={{ pathname: "/districts" }} className="hover:underline">
             Districts
           </Link>
+          <Link href={{ pathname: "/buildings" }} className="hover:underline">
+            Buildings
+          </Link>
           <Link href={{ pathname: "/units" }} className="hover:underline">
             Units
+          </Link>
+          <Link href={{ pathname: "/decoration" }} className="hover:underline">
+            Decoration
           </Link>
         </nav>
       </div>

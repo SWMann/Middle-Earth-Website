@@ -458,6 +458,158 @@ export const factionDistrictRulesCatalogue = [
   { factionId: "dol_amroth", districtTypeId: "barracks", ruleType: "override", params: { with: "swan_knight_hall" } },
 ];
 
+// --- Functional components (floorplanner markers) ------------------------
+
+export const functionalComponentsCatalogue = [
+  { id: "BED", displayName: "Bed", description: "A place to sleep. Residential districts need one per inhabitant of cap." },
+  { id: "DOOR", displayName: "Door", description: "A working entrance. Every enclosed build needs at least one." },
+  { id: "STORAGE", displayName: "Storage", description: "Chest, barrel, or crate. Holds the district's stock." },
+  { id: "COOKING", displayName: "Cooking Station", description: "Furnace, smoker, or campfire for preparing food." },
+  { id: "HEARTH", displayName: "Hearth", description: "A fireplace. Warmth, and the heart of a gathering space." },
+  { id: "ANVIL", displayName: "Anvil", description: "For shaping metal. The smith's core tool." },
+  { id: "FORGE", displayName: "Forge", description: "A blast furnace or smelter for working ore at heat." },
+  { id: "ALTAR", displayName: "Altar", description: "A focus of worship or reverence." },
+  { id: "ARROW_RACK", displayName: "Arrow Rack", description: "Racked weapons and ammunition. Marks a martial building." },
+  { id: "STABLE_STALL", displayName: "Stall", description: "Housing for a single mount." },
+  { id: "WELL", displayName: "Well", description: "A clean water source. Vital to healing and to large settlements." },
+  { id: "LECTERN", displayName: "Lectern", description: "A reading and writing station. The scholar's seat." },
+  { id: "TABLE", displayName: "Table", description: "A surface to gather around — for trade, dining, or council." },
+  { id: "BANNER", displayName: "Banner", description: "Hung heraldry. Marks a seat of authority." },
+];
+
+// --- Building types -------------------------------------------------------
+
+export const buildingTypesCatalogue = [
+  { id: "bunkhouse", displayName: "Bunkhouse", category: "functional", description: "Rows of bunks under one roof.", provides: ["BED"] },
+  { id: "bakehouse", displayName: "Bakehouse", category: "functional", description: "Ovens, a kneading-bench, a flour-bin.", provides: ["COOKING"] },
+  { id: "flour_mill", displayName: "Flour Mill", category: "functional", description: "A millstone, geared to wind or water.", provides: ["STORAGE"] },
+  { id: "forge_building", displayName: "Forge House", category: "functional", description: "A stone-hooded smelting forge.", provides: ["FORGE"] },
+  { id: "anvil_shed", displayName: "Anvil Shed", category: "functional", description: "An anvil, a slack-tub, a rack of tongs.", provides: ["ANVIL"] },
+  { id: "granary", displayName: "Granary", category: "functional", description: "Raised, dry, rodent-proofed grain store.", provides: ["STORAGE"] },
+  { id: "captains_hall", displayName: "Captain's Hall", category: "structural", description: "The seat where a settlement's leader holds court.", provides: ["TABLE", "BANNER"] },
+  { id: "tower_armoury", displayName: "Tower Armoury", category: "functional", description: "Racked arms and a watch-room.", provides: ["ARROW_RACK", "STORAGE"] },
+  { id: "stable_block", displayName: "Stable Block", category: "functional", description: "Stalls, a tack-room, a paddock gate.", provides: ["STABLE_STALL"] },
+  { id: "watchpost", displayName: "Watchpost", category: "structural", description: "An elevated lookout with a signal-beacon.", provides: [] },
+  { id: "healing_ward", displayName: "Healing Ward", category: "functional", description: "Clean cots, a herb-store, a warm fire.", provides: ["BED", "HEARTH"] },
+  { id: "scriptorium", displayName: "Scriptorium", category: "functional", description: "Writing-desks and shelved scrolls.", provides: ["LECTERN", "STORAGE"] },
+  { id: "market_stalls", displayName: "Market Stalls", category: "functional", description: "Covered trading stalls and a weigh-house.", provides: ["TABLE"] },
+  { id: "hearth_hall", displayName: "Hearth Hall", category: "structural", description: "A long hall around a central fire.", provides: ["HEARTH", "TABLE"] },
+  { id: "chapel", displayName: "Chapel", category: "landmark", description: "A small place of reverence.", provides: ["ALTAR"] },
+  { id: "well_house", displayName: "Well House", category: "functional", description: "A roofed, drawn well.", provides: ["WELL"] },
+];
+
+// --- District required buildings ------------------------------------------
+// kind 'specific' names an exact building; 'themed' wants N matching a
+// theme (buildingTypeId null, themeNote set).
+
+export const districtRequiredBuildingsCatalogue = [
+  { districtTypeId: "wheat_farm", kind: "specific", buildingTypeId: "granary", count: 1, themeNote: null },
+  { districtTypeId: "bakery", kind: "specific", buildingTypeId: "flour_mill", count: 1, themeNote: null },
+  { districtTypeId: "bakery", kind: "specific", buildingTypeId: "bakehouse", count: 1, themeNote: null },
+  { districtTypeId: "bakery", kind: "themed", buildingTypeId: null, count: 2, themeNote: "bakery-themed" },
+  { districtTypeId: "smithy", kind: "specific", buildingTypeId: "forge_building", count: 1, themeNote: null },
+  { districtTypeId: "smithy", kind: "specific", buildingTypeId: "anvil_shed", count: 1, themeNote: null },
+  { districtTypeId: "foundry", kind: "specific", buildingTypeId: "forge_building", count: 2, themeNote: null },
+  { districtTypeId: "foundry", kind: "specific", buildingTypeId: "anvil_shed", count: 1, themeNote: null },
+  { districtTypeId: "barracks", kind: "specific", buildingTypeId: "bunkhouse", count: 2, themeNote: null },
+  { districtTypeId: "barracks", kind: "specific", buildingTypeId: "tower_armoury", count: 1, themeNote: null },
+  { districtTypeId: "stables", kind: "specific", buildingTypeId: "stable_block", count: 2, themeNote: null },
+  { districtTypeId: "swan_knight_hall", kind: "specific", buildingTypeId: "stable_block", count: 2, themeNote: null },
+  { districtTypeId: "swan_knight_hall", kind: "specific", buildingTypeId: "captains_hall", count: 1, themeNote: null },
+  { districtTypeId: "great_hall", kind: "specific", buildingTypeId: "captains_hall", count: 1, themeNote: null },
+  { districtTypeId: "great_hall", kind: "specific", buildingTypeId: "hearth_hall", count: 1, themeNote: null },
+  { districtTypeId: "library", kind: "specific", buildingTypeId: "scriptorium", count: 2, themeNote: null },
+  { districtTypeId: "market", kind: "specific", buildingTypeId: "market_stalls", count: 2, themeNote: null },
+  { districtTypeId: "healing_house", kind: "specific", buildingTypeId: "healing_ward", count: 2, themeNote: null },
+  { districtTypeId: "healing_house", kind: "specific", buildingTypeId: "well_house", count: 1, themeNote: null },
+  { districtTypeId: "watchtower", kind: "specific", buildingTypeId: "watchpost", count: 1, themeNote: null },
+  { districtTypeId: "tavern", kind: "specific", buildingTypeId: "hearth_hall", count: 1, themeNote: null },
+];
+
+// --- District required components -----------------------------------------
+
+export const districtRequiredComponentsCatalogue = [
+  // Residential: a bed per cap, plus a working door.
+  { districtTypeId: "hovel", componentId: "BED", count: 1, perCap: true },
+  { districtTypeId: "hovel", componentId: "DOOR", count: 1, perCap: false },
+  { districtTypeId: "cottage", componentId: "BED", count: 1, perCap: true },
+  { districtTypeId: "cottage", componentId: "DOOR", count: 1, perCap: false },
+  { districtTypeId: "cottage", componentId: "HEARTH", count: 1, perCap: false },
+  { districtTypeId: "house", componentId: "BED", count: 1, perCap: true },
+  { districtTypeId: "house", componentId: "DOOR", count: 1, perCap: false },
+  { districtTypeId: "house", componentId: "HEARTH", count: 1, perCap: false },
+  { districtTypeId: "manor", componentId: "BED", count: 1, perCap: true },
+  { districtTypeId: "manor", componentId: "DOOR", count: 2, perCap: false },
+  { districtTypeId: "manor", componentId: "HEARTH", count: 2, perCap: false },
+  // Production / functional districts.
+  { districtTypeId: "wheat_farm", componentId: "STORAGE", count: 1, perCap: false },
+  { districtTypeId: "bakery", componentId: "COOKING", count: 1, perCap: false },
+  { districtTypeId: "bakery", componentId: "STORAGE", count: 1, perCap: false },
+  { districtTypeId: "smithy", componentId: "ANVIL", count: 1, perCap: false },
+  { districtTypeId: "smithy", componentId: "FORGE", count: 1, perCap: false },
+  { districtTypeId: "smithy", componentId: "STORAGE", count: 1, perCap: false },
+  { districtTypeId: "foundry", componentId: "FORGE", count: 2, perCap: false },
+  { districtTypeId: "foundry", componentId: "STORAGE", count: 1, perCap: false },
+  { districtTypeId: "barracks", componentId: "BED", count: 5, perCap: false },
+  { districtTypeId: "barracks", componentId: "ARROW_RACK", count: 1, perCap: false },
+  { districtTypeId: "stables", componentId: "STABLE_STALL", count: 4, perCap: false },
+  { districtTypeId: "great_hall", componentId: "TABLE", count: 1, perCap: false },
+  { districtTypeId: "great_hall", componentId: "BANNER", count: 1, perCap: false },
+  { districtTypeId: "library", componentId: "LECTERN", count: 2, perCap: false },
+  { districtTypeId: "library", componentId: "STORAGE", count: 1, perCap: false },
+  { districtTypeId: "market", componentId: "TABLE", count: 2, perCap: false },
+  { districtTypeId: "healing_house", componentId: "BED", count: 4, perCap: false },
+  { districtTypeId: "healing_house", componentId: "HEARTH", count: 1, perCap: false },
+  { districtTypeId: "healing_house", componentId: "WELL", count: 1, perCap: false },
+  { districtTypeId: "tavern", componentId: "HEARTH", count: 1, perCap: false },
+  { districtTypeId: "tavern", componentId: "TABLE", count: 2, perCap: false },
+];
+
+// --- District footprint / height / decoration overrides ------------------
+// Applied as an UPDATE pass in the seed (kept out of the main district
+// catalogue to avoid bloating every entry).
+
+export const districtFootprintCatalogue = [
+  { id: "hovel", minFootprintBlocks: 16, maxFootprintBlocks: 49, minHeightBlocks: 3 },
+  { id: "cottage", minFootprintBlocks: 36, maxFootprintBlocks: 100, minHeightBlocks: 4 },
+  { id: "house", minFootprintBlocks: 64, maxFootprintBlocks: 200, minHeightBlocks: 6 },
+  { id: "manor", minFootprintBlocks: 150, maxFootprintBlocks: 400, minHeightBlocks: 8 },
+  { id: "bakery", minFootprintBlocks: 49, maxFootprintBlocks: 200, minHeightBlocks: 5 },
+  { id: "smithy", minFootprintBlocks: 64, maxFootprintBlocks: 256, minHeightBlocks: 5 },
+  { id: "foundry", minFootprintBlocks: 100, maxFootprintBlocks: 400, minHeightBlocks: 8 },
+  { id: "great_hall", minFootprintBlocks: 100, maxFootprintBlocks: 500, minHeightBlocks: 8 },
+  { id: "library", minFootprintBlocks: 100, maxFootprintBlocks: 400, minHeightBlocks: 7, decorationThreshold: 75 },
+  { id: "watchtower", minFootprintBlocks: 25, maxFootprintBlocks: 100, minHeightBlocks: 15 },
+  { id: "capital_walls", decorationThreshold: 90 },
+  { id: "citadel_walls", decorationThreshold: 85 },
+];
+
+// --- Decoration scoring criteria (mod_spec §7.5) -------------------------
+
+export const decorationCriteriaCatalogue = [
+  { id: "block_variety", displayName: "Block Variety", weightPct: 15, description: "Distinct block types used across walls, floors, and detailing." },
+  { id: "light_density", displayName: "Light Density", weightPct: 10, description: "Light sources per unit of habitable area." },
+  { id: "vertical_interest", displayName: "Vertical Interest", weightPct: 15, description: "Roof complexity, multi-level features, variation in height." },
+  { id: "decoration_density", displayName: "Decoration Density", weightPct: 20, description: "Non-structural blocks: banners, pots, books, flowers, and the like." },
+  { id: "theme_adherence", displayName: "Theme Adherence", weightPct: 15, description: "Block palette matches the faction's approved themed sets." },
+  { id: "furnishing_completeness", displayName: "Furnishing Completeness", weightPct: 10, description: "Required functional components present, plus extras." },
+  { id: "scale_appropriateness", displayName: "Scale Appropriateness", weightPct: 10, description: "Building size matches purpose — no 10×10 manors, no 50×50 hovels." },
+  { id: "material_quality", displayName: "Material Quality", weightPct: 5, description: "Use of mid- and high-tier blocks over all-dirt-and-cobble." },
+];
+
+// --- Tier decoration thresholds (mod_spec §7.5) -------------------------
+
+export const tierDecorationThresholdsCatalogue = [
+  { tier: "hamlet", minScore: 50, reviewMode: "light", note: "Auto-approve at 50+, else a light staff look." },
+  { tier: "steading", minScore: 50, reviewMode: "light", note: "Auto-approve at 50+, else a light staff look." },
+  { tier: "village", minScore: 65, reviewMode: "light", note: "Auto-approve at 65+, else a light staff look." },
+  { tier: "burgh", minScore: 65, reviewMode: "light", note: "Auto-approve at 65+, else a light staff look." },
+  { tier: "town", minScore: 75, reviewMode: "spot", note: "Auto-approve at 75+ with a precise plan; otherwise staff spot-check." },
+  { tier: "city", minScore: 85, reviewMode: "spot", note: "Always staff spot-checked, even at high scores." },
+  { tier: "great_city", minScore: null, reviewMode: "full", note: "Always full staff review; score is informational." },
+  { tier: "capital", minScore: null, reviewMode: "full", note: "Always full staff review; score is informational." },
+];
+
 // --- District consumes (tag-based) ---------------------------------------
 
 export const districtConsumesCatalogue = [

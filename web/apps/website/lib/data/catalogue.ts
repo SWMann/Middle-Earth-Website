@@ -416,3 +416,123 @@ export const getRankLadder = cache(async () => {
     .from(schema.unitRanks)
     .orderBy(schema.unitRanks.level);
 });
+
+// --- Buildings & composition --------------------------------------------
+
+export const getAllBuildingTypes = cache(async () => {
+  return await db
+    .select()
+    .from(schema.buildingTypes)
+    .orderBy(schema.buildingTypes.category, schema.buildingTypes.displayName);
+});
+
+export const getAllFunctionalComponents = cache(async () => {
+  return await db
+    .select()
+    .from(schema.functionalComponents)
+    .orderBy(schema.functionalComponents.displayName);
+});
+
+export const getBuildingComponents = cache(async (buildingTypeId: string) => {
+  return await db
+    .select({
+      id: schema.functionalComponents.id,
+      displayName: schema.functionalComponents.displayName,
+    })
+    .from(schema.buildingProvidesComponents)
+    .innerJoin(
+      schema.functionalComponents,
+      eq(schema.buildingProvidesComponents.componentId, schema.functionalComponents.id),
+    )
+    .where(eq(schema.buildingProvidesComponents.buildingTypeId, buildingTypeId));
+});
+
+export const getDistrictRequiredBuildings = cache(
+  async (districtTypeId: string) => {
+    return await db
+      .select({
+        id: schema.districtRequiredBuildings.id,
+        kind: schema.districtRequiredBuildings.kind,
+        buildingTypeId: schema.districtRequiredBuildings.buildingTypeId,
+        buildingName: schema.buildingTypes.displayName,
+        count: schema.districtRequiredBuildings.count,
+        themeNote: schema.districtRequiredBuildings.themeNote,
+      })
+      .from(schema.districtRequiredBuildings)
+      .leftJoin(
+        schema.buildingTypes,
+        eq(schema.districtRequiredBuildings.buildingTypeId, schema.buildingTypes.id),
+      )
+      .where(eq(schema.districtRequiredBuildings.districtTypeId, districtTypeId));
+  },
+);
+
+export const getDistrictRequiredComponents = cache(
+  async (districtTypeId: string) => {
+    return await db
+      .select({
+        componentId: schema.districtRequiredComponents.componentId,
+        componentName: schema.functionalComponents.displayName,
+        count: schema.districtRequiredComponents.count,
+        perCap: schema.districtRequiredComponents.perCap,
+      })
+      .from(schema.districtRequiredComponents)
+      .innerJoin(
+        schema.functionalComponents,
+        eq(
+          schema.districtRequiredComponents.componentId,
+          schema.functionalComponents.id,
+        ),
+      )
+      .where(eq(schema.districtRequiredComponents.districtTypeId, districtTypeId));
+  },
+);
+
+/** All building→component links in one shot, for the buildings index. */
+export const getAllBuildingComponentLinks = cache(async () => {
+  return await db
+    .select({
+      buildingTypeId: schema.buildingProvidesComponents.buildingTypeId,
+      componentId: schema.buildingProvidesComponents.componentId,
+      componentName: schema.functionalComponents.displayName,
+    })
+    .from(schema.buildingProvidesComponents)
+    .innerJoin(
+      schema.functionalComponents,
+      eq(
+        schema.buildingProvidesComponents.componentId,
+        schema.functionalComponents.id,
+      ),
+    );
+});
+
+/** Reverse index: which districts require each specific building. */
+export const getBuildingDistrictUsage = cache(async () => {
+  return await db
+    .select({
+      buildingTypeId: schema.districtRequiredBuildings.buildingTypeId,
+      districtTypeId: schema.districtRequiredBuildings.districtTypeId,
+      districtName: schema.districtTypes.displayName,
+      count: schema.districtRequiredBuildings.count,
+    })
+    .from(schema.districtRequiredBuildings)
+    .innerJoin(
+      schema.districtTypes,
+      eq(
+        schema.districtRequiredBuildings.districtTypeId,
+        schema.districtTypes.id,
+      ),
+    )
+    .where(eq(schema.districtRequiredBuildings.kind, "specific"));
+});
+
+export const getDecorationCriteria = cache(async () => {
+  return await db
+    .select()
+    .from(schema.decorationCriteria)
+    .orderBy(desc(schema.decorationCriteria.weightPct));
+});
+
+export const getTierDecorationThresholds = cache(async () => {
+  return await db.select().from(schema.tierDecorationThresholds);
+});

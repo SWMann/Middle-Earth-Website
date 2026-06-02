@@ -34,6 +34,13 @@ import {
   districtPrerequisitesCatalogue,
   districtAdjacencyBonusesCatalogue,
   factionDistrictRulesCatalogue,
+  functionalComponentsCatalogue,
+  buildingTypesCatalogue,
+  districtRequiredBuildingsCatalogue,
+  districtRequiredComponentsCatalogue,
+  districtFootprintCatalogue,
+  decorationCriteriaCatalogue,
+  tierDecorationThresholdsCatalogue,
   districtConsumesCatalogue,
   districtProducesCatalogue,
   districtProductionBonusesCatalogue,
@@ -668,6 +675,87 @@ async function main() {
   await db.execute(sqlOp`DELETE FROM config.faction_district_rules`);
   for (const r of factionDistrictRulesCatalogue) {
     await db.insert(schema.factionDistrictRules).values(r);
+  }
+
+  // Building composition: components, buildings, district requirements,
+  // footprint overrides, decoration scoring.
+  await db.execute(sqlOp`DELETE FROM config.district_required_components`);
+  await db.execute(sqlOp`DELETE FROM config.district_required_buildings`);
+  await db.execute(sqlOp`DELETE FROM config.building_provides_components`);
+
+  for (const fc of functionalComponentsCatalogue) {
+    await db
+      .insert(schema.functionalComponents)
+      .values(fc)
+      .onConflictDoUpdate({
+        target: schema.functionalComponents.id,
+        set: { displayName: fc.displayName, description: fc.description },
+      });
+  }
+  for (const b of buildingTypesCatalogue) {
+    await db
+      .insert(schema.buildingTypes)
+      .values({
+        id: b.id,
+        displayName: b.displayName,
+        description: b.description,
+        category: b.category,
+      })
+      .onConflictDoUpdate({
+        target: schema.buildingTypes.id,
+        set: {
+          displayName: b.displayName,
+          description: b.description,
+          category: b.category,
+        },
+      });
+    for (const comp of b.provides) {
+      await db
+        .insert(schema.buildingProvidesComponents)
+        .values({ buildingTypeId: b.id, componentId: comp });
+    }
+  }
+  for (const rb of districtRequiredBuildingsCatalogue) {
+    await db.insert(schema.districtRequiredBuildings).values(rb);
+  }
+  for (const rc of districtRequiredComponentsCatalogue) {
+    await db.insert(schema.districtRequiredComponents).values(rc);
+  }
+
+  // Footprint / height / decoration overrides as an UPDATE pass.
+  for (const f of districtFootprintCatalogue) {
+    await db
+      .update(schema.districtTypes)
+      .set({
+        minFootprintBlocks: f.minFootprintBlocks ?? null,
+        maxFootprintBlocks: f.maxFootprintBlocks ?? null,
+        minHeightBlocks: f.minHeightBlocks ?? null,
+        decorationThreshold: f.decorationThreshold ?? null,
+      })
+      .where(sqlOp`${schema.districtTypes.id} = ${f.id}`);
+  }
+
+  for (const dc of decorationCriteriaCatalogue) {
+    await db
+      .insert(schema.decorationCriteria)
+      .values(dc)
+      .onConflictDoUpdate({
+        target: schema.decorationCriteria.id,
+        set: {
+          displayName: dc.displayName,
+          description: dc.description,
+          weightPct: dc.weightPct,
+        },
+      });
+  }
+  for (const td of tierDecorationThresholdsCatalogue) {
+    await db
+      .insert(schema.tierDecorationThresholds)
+      .values(td)
+      .onConflictDoUpdate({
+        target: schema.tierDecorationThresholds.tier,
+        set: { minScore: td.minScore, reviewMode: td.reviewMode, note: td.note },
+      });
   }
 
   await db.execute(sqlOp`DELETE FROM config.district_consumes`);

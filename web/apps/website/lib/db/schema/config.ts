@@ -22,6 +22,7 @@ import {
   primaryKey,
   jsonb,
   bigserial,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { factions } from "./game.ts";
 
@@ -116,7 +117,20 @@ export const districtTypes = config.table("district_types", {
   /** Self-reference: this district is an upgrade of another (Cottage ← Hovel). */
   upgradesFrom: text("upgrades_from"),
 
-  /** Catch-all for anything not worth a column (wall stats, building reqs, etc). */
+  // --- Construction footprint (floorplanner) ---
+  /** Minimum / maximum ground area in blocks. NULL = unconstrained. */
+  minFootprintBlocks: integer("min_footprint_blocks"),
+  maxFootprintBlocks: integer("max_footprint_blocks"),
+  /** Minimum build height in blocks — encourages vertical interest. */
+  minHeightBlocks: integer("min_height_blocks"),
+  /**
+   * Decoration-score threshold override. NULL = use the tier default
+   * (config.tier_decoration_thresholds). A Unique District might demand
+   * a higher bar than its tier would.
+   */
+  decorationThreshold: integer("decoration_threshold"),
+
+  /** Catch-all for anything not worth a column (wall stats, etc). */
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
 });
 
@@ -444,6 +458,120 @@ export const districtTierOutput = config.table(
   }),
 );
 
+// --- Buildings & components (the floorplanner composition layer) ---------
+
+/**
+ * A named building — the unit a player actually constructs block-by-block.
+ * Districts are composed OF buildings (a Bakery = a Flour Mill + a
+ * Bakehouse + themed structures). Per mod_spec.md §7.
+ */
+export const buildingTypes = config.table("building_types", {
+  id: text("id").primaryKey(), // 'flour_mill', 'bakehouse', 'captains_hall'
+  displayName: text("display_name").notNull(),
+  description: text("description").notNull().default(""),
+  /** 'functional' | 'structural' | 'decorative' | 'landmark'. */
+  category: text("category").notNull().default("functional"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+});
+
+/**
+ * The functional markers the mod verifies exist inside a build: a bed, a
+ * door, a cooking station. Players drop these onto blocks in the
+ * floorplanner; the mod checks the actual world matches.
+ */
+export const functionalComponents = config.table("functional_components", {
+  id: text("id").primaryKey(), // 'BED', 'DOOR', 'STORAGE', 'COOKING', ...
+  displayName: text("display_name").notNull(),
+  description: text("description").notNull().default(""),
+});
+
+/** Which components a building inherently provides. */
+export const buildingProvidesComponents = config.table(
+  "building_provides_components",
+  {
+    buildingTypeId: text("building_type_id")
+      .notNull()
+      .references(() => buildingTypes.id),
+    componentId: text("component_id")
+      .notNull()
+      .references(() => functionalComponents.id),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.buildingTypeId, t.componentId] }),
+  }),
+);
+
+/**
+ * What buildings a district requires. 'specific' names an exact building;
+ * 'themed' requires N buildings matching a theme (the spec's "2x
+ * bakery-themed buildings"), in which case buildingTypeId is null and
+ * themeNote describes the theme.
+ */
+export const districtRequiredBuildings = config.table(
+  "district_required_buildings",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    districtTypeId: text("district_type_id")
+      .notNull()
+      .references(() => districtTypes.id),
+    kind: text("kind").notNull().default("specific"), // 'specific' | 'themed'
+    buildingTypeId: text("building_type_id").references(() => buildingTypes.id),
+    count: integer("count").notNull().default(1),
+    themeNote: text("theme_note"),
+  },
+);
+
+/**
+ * What functional components a district must contain. perCap = the count
+ * scales with the settlement's population cap (e.g. 1 BED per cap in
+ * residential); otherwise count is absolute.
+ */
+export const districtRequiredComponents = config.table(
+  "district_required_components",
+  {
+    districtTypeId: text("district_type_id")
+      .notNull()
+      .references(() => districtTypes.id),
+    componentId: text("component_id")
+      .notNull()
+      .references(() => functionalComponents.id),
+    count: integer("count").notNull().default(1),
+    perCap: boolean("per_cap").notNull().default(false),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.districtTypeId, t.componentId] }),
+  }),
+);
+
+// --- Decoration scoring (build quality) ----------------------------------
+
+/**
+ * The weighted criteria the mod scores a finished build against (mod_spec
+ * §7.5). Each is scored 0–100; the weighted sum is the decoration score.
+ * Weights live in config so they can be retuned without a deploy.
+ */
+export const decorationCriteria = config.table("decoration_criteria", {
+  id: text("id").primaryKey(), // 'block_variety', 'light_density', ...
+  displayName: text("display_name").notNull(),
+  description: text("description").notNull().default(""),
+  weightPct: integer("weight_pct").notNull(),
+});
+
+/**
+ * The decoration score a build must reach to auto-approve at each
+ * settlement tier (mechanics_spec §2.3 / mod_spec §7.5). NULL minScore =
+ * always staff-reviewed regardless of score.
+ */
+export const tierDecorationThresholds = config.table(
+  "tier_decoration_thresholds",
+  {
+    tier: text("tier").primaryKey(),
+    minScore: integer("min_score"),
+    reviewMode: text("review_mode").notNull(), // 'auto' | 'light' | 'spot' | 'full'
+    note: text("note").notNull().default(""),
+  },
+);
+
 // --- Unit types -----------------------------------------------------------
 
 export const unitTypes = config.table("unit_types", {
@@ -638,3 +766,7 @@ export type UnitAttack = typeof unitAttacks.$inferSelect;
 export type UnitRank = typeof unitRanks.$inferSelect;
 export type CombatTrait = typeof combatTraits.$inferSelect;
 export type UnitAbility = typeof unitAbilities.$inferSelect;
+export type BuildingType = typeof buildingTypes.$inferSelect;
+export type FunctionalComponent = typeof functionalComponents.$inferSelect;
+export type DecorationCriterion = typeof decorationCriteria.$inferSelect;
+export type TierDecorationThreshold = typeof tierDecorationThresholds.$inferSelect;
