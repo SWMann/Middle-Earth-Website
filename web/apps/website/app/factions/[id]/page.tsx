@@ -9,6 +9,12 @@ import {
 } from "@/lib/data/factions";
 import { getRecentEvents } from "@/lib/data/events";
 import {
+  getDiplomaticStatesFor,
+  otherFaction,
+  diplomaticStateLabel,
+  diplomaticStateTone,
+} from "@/lib/data/diplomacy";
+import {
   getCharactersByFaction,
   getActiveCharacterForPlayer,
 } from "@/lib/data/characters";
@@ -50,13 +56,14 @@ export default async function FactionDetailPage({
   const f = await getFaction(id);
   if (!f) notFound();
 
-  const [parent, subs, regions, settlements, characters, events] = await Promise.all([
+  const [parent, subs, regions, settlements, characters, events, diplomaticStates] = await Promise.all([
     f.parentFactionId ? getFaction(f.parentFactionId) : Promise.resolve(null),
     getSubfactions(f.id),
     getRegionsClaimedBy(f.id),
     getSettlementsByFaction(f.id),
     getCharactersByFaction(f.id),
     getRecentEvents({ visibility: ["public"], factionId: f.id, touching: true, limit: 10 }),
+    getDiplomaticStatesFor(f.id),
   ]);
 
   // Faction leader = highest-influence active character. Reasonable
@@ -134,6 +141,46 @@ export default async function FactionDetailPage({
           </p>
         )}
       </header>
+
+      {/* ----- Diplomatic banner ----- */}
+      {diplomaticStates.length > 0 && (
+        <section className="space-y-2">
+          {diplomaticStates.map((d) => {
+            const tone = diplomaticStateTone(d.stateType);
+            const other = otherFaction(d, f.id);
+            const cls =
+              tone === "hostile"
+                ? "border-red-700/40 bg-red-700/5 text-red-700 dark:text-red-400"
+                : tone === "friendly"
+                ? "border-emerald-700/40 bg-emerald-700/5 text-emerald-700 dark:text-emerald-400"
+                : "border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-900";
+            return (
+              <div
+                key={d.id}
+                className={`rounded border ${cls} p-3 text-sm flex flex-wrap items-baseline gap-3`}
+              >
+                <span className="font-medium">
+                  {diplomaticStateLabel(d.stateType)}
+                </span>
+                <FactionTag factionId={other} />
+                {d.reason && (
+                  <span className="opacity-70 text-xs">
+                    — {d.reason}
+                  </span>
+                )}
+                <span className="ml-auto text-xs opacity-60">
+                  since{" "}
+                  {d.startedAt.toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {/* ----- Stat line ----- */}
       <section className="border-y border-stone-200 dark:border-stone-800 py-6">

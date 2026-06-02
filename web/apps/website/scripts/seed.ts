@@ -797,6 +797,45 @@ async function main() {
       .where(sqlOp`${schema.factions.id} = ${factionId}`);
   }
 
+  console.log("Seeding diplomatic states…");
+  // Match the existing audit events: Mordor at war with Gondor (declared
+  // 1 day ago in seed-time), Rohan allied with Gondor (pledged just now).
+  // Wipe + re-insert; deterministic across seed runs.
+  await db.execute(sqlOp`DELETE FROM game.diplomatic_states`);
+  const nowMs = Date.now();
+  await db.insert(schema.diplomaticStates).values([
+    {
+      stateType: "war",
+      factionAId: "mordor",
+      factionBId: "gondor",
+      status: "active",
+      initiatedByFactionId: "mordor",
+      reason: "Border raids in Ithilien",
+      dpCost: 800,
+      startedAt: new Date(nowMs - 1 * 24 * 60 * 60 * 1000),
+    },
+    {
+      stateType: "alliance_basic",
+      factionAId: "rohan",
+      factionBId: "gondor",
+      status: "active",
+      initiatedByFactionId: "rohan",
+      reason: "Oath of Eorl",
+      dpCost: 1200,
+      startedAt: new Date(nowMs - 8 * 60 * 1000),
+    },
+    {
+      stateType: "trade_deal",
+      factionAId: "erebor",
+      factionBId: "dale",
+      status: "active",
+      initiatedByFactionId: "erebor",
+      reason: "Iron and gems out, food and cloth in — the long lake compact.",
+      dpCost: 600,
+      startedAt: new Date(nowMs - 5 * 24 * 60 * 60 * 1000),
+    },
+  ]);
+
   console.log("Seeding wiki pages…");
   for (const w of wikiPages) {
     await db

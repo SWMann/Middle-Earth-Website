@@ -234,8 +234,66 @@ export const resourceStocks = game.table(
   }),
 );
 
+// --- Diplomatic states ---------------------------------------------------
+
+/**
+ * Active diplomatic relationships between factions — wars, alliances,
+ * trade deals, non-aggression pacts, truces, vassalages.
+ *
+ * Storage is single-row (not mirrored). For symmetric relationships
+ * (war, alliance, non-aggression, truce, trade) queries that ask
+ * "what's faction X involved in" check both factionAId and factionBId.
+ * Asymmetric relationships (vassalage) treat factionAId as the
+ * suzerain and factionBId as the vassal.
+ *
+ * Status lifecycle:
+ *   active   → resolved (war ends, treaty signed) / broken (alliance
+ *                broken unilaterally) / expired (timed deal ends naturally)
+ *
+ * Per mechanics_spec.md §8.2 the DP costs to enter each state vary
+ * (war 800, trade 600, basic alliance 1200, military alliance 2200);
+ * recorded in dpCost for traceability.
+ */
+export const diplomaticStates = game.table("diplomatic_states", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  /**
+   * 'war' | 'alliance_basic' | 'alliance_military' | 'trade_deal' |
+   * 'non_aggression' | 'truce' | 'vassalage' | 'joint_operation'
+   */
+  stateType: text("state_type").notNull(),
+  factionAId: text("faction_a_id")
+    .notNull()
+    .references(() => factions.id),
+  factionBId: text("faction_b_id")
+    .notNull()
+    .references(() => factions.id),
+  /** 'active' | 'resolved' | 'broken' | 'expired' */
+  status: text("status").notNull().default("active"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Nullable. Set for time-limited states (truce, council-decreed periods). */
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  /** When the state actually ended (war won, alliance broken, etc). */
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  /** Who declared / initiated. For symmetric relationships this is informational. */
+  initiatedByFactionId: text("initiated_by_faction_id").references(() => factions.id),
+  /** Free-text reason. Wars: casus belli. Alliances: pledge wording. */
+  reason: text("reason").notNull().default(""),
+  /** DP spent to enter this state (per mechanics_spec.md §8.2). */
+  dpCost: integer("dp_cost").notNull().default(0),
+  /**
+   * How it ended: 'peace_treaty' | 'white_peace' | 'conquest' | 'breach' |
+   * 'expiry' | 'mutual_dissolution'.
+   */
+  resolutionType: text("resolution_type"),
+  /** The audit.events row that resolved this state (peace treaty event etc). */
+  resolutionEventId: bigint("resolution_event_id", { mode: "number" }),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+});
+
 export type Faction = typeof factions.$inferSelect;
 export type NewFaction = typeof factions.$inferInsert;
+export type DiplomaticState = typeof diplomaticStates.$inferSelect;
+export type NewDiplomaticState = typeof diplomaticStates.$inferInsert;
 export type Region = typeof regions.$inferSelect;
 export type NewRegion = typeof regions.$inferInsert;
 export type Settlement = typeof settlements.$inferSelect;
