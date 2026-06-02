@@ -36,6 +36,9 @@ import {
   factionDistrictRulesCatalogue,
   districtConsumesCatalogue,
   districtProducesCatalogue,
+  districtProductionBonusesCatalogue,
+  districtRecipesCatalogue,
+  districtTierOutputCatalogue,
   unitTypesCatalogue,
   unitRecruitmentCostCatalogue,
   occupationClassesCatalogue,
@@ -668,6 +671,41 @@ async function main() {
   await db.execute(sqlOp`DELETE FROM config.district_produces`);
   for (const dp of districtProducesCatalogue) {
     await db.insert(schema.districtProduces).values(dp);
+  }
+
+  // Production sophistication: conditional bonuses, recipes, tier scaling.
+  await db.execute(sqlOp`DELETE FROM config.district_production_bonuses`);
+  for (const b of districtProductionBonusesCatalogue) {
+    await db.insert(schema.districtProductionBonuses).values(b);
+  }
+
+  // Recipes carry nested consumes/produces — insert the recipe, get its
+  // id, then the children. Order matters for the FK delete.
+  await db.execute(sqlOp`DELETE FROM config.recipe_consumes`);
+  await db.execute(sqlOp`DELETE FROM config.recipe_produces`);
+  await db.execute(sqlOp`DELETE FROM config.district_recipes`);
+  for (const r of districtRecipesCatalogue) {
+    const inserted = await db
+      .insert(schema.districtRecipes)
+      .values({
+        districtTypeId: r.districtTypeId,
+        recipeKey: r.recipeKey,
+        displayName: r.displayName,
+        description: r.description,
+      })
+      .returning({ id: schema.districtRecipes.id });
+    const recipeId = inserted[0]!.id;
+    for (const c of r.consumes) {
+      await db.insert(schema.recipeConsumes).values({ recipeId, ...c });
+    }
+    for (const p of r.produces) {
+      await db.insert(schema.recipeProduces).values({ recipeId, ...p });
+    }
+  }
+
+  await db.execute(sqlOp`DELETE FROM config.district_tier_output`);
+  for (const t of districtTierOutputCatalogue) {
+    await db.insert(schema.districtTierOutput).values(t);
   }
 
   for (const u of unitTypesCatalogue) {

@@ -14,6 +14,9 @@ import {
   getDistrictUpgradeTargets,
   getDistrictAdjacencyBonuses,
   getFactionRulesForDistrict,
+  getDistrictProductionBonuses,
+  getDistrictTierOutput,
+  getDistrictRecipes,
 } from "@/lib/data/catalogue";
 import { getFaction } from "@/lib/data/factions";
 import { FactionTag } from "@/components/tags/faction-tag";
@@ -54,6 +57,9 @@ export default async function DistrictDetailPage({
     upgradeTargets,
     adjacency,
     factionRules,
+    productionBonuses,
+    tierOutput,
+    recipes,
   ] = await Promise.all([
     getDistrictConsumes(district.id),
     getDistrictProduces(district.id),
@@ -65,6 +71,9 @@ export default async function DistrictDetailPage({
     getDistrictUpgradeTargets(district.id),
     getDistrictAdjacencyBonuses(district.id),
     getFactionRulesForDistrict(district.id),
+    getDistrictProductionBonuses(district.id),
+    getDistrictTierOutput(district.id),
+    getDistrictRecipes(district.id),
   ]);
 
   const upgradesFrom = district.upgradesFrom
@@ -243,6 +252,11 @@ export default async function DistrictDetailPage({
                   <span className="text-xs text-stone-500">
                     requires weight ≥ {c.weightMin}
                   </span>
+                  {c.consumptionPeriod !== "daily" && (
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400">
+                      {c.consumptionPeriod} · catalyst
+                    </span>
+                  )}
                 </div>
                 {c.candidates.length === 0 ? (
                   <p className="text-xs opacity-60 italic">
@@ -280,12 +294,107 @@ export default async function DistrictDetailPage({
                 >
                   {p.resourceName}
                 </Link>
+                {p.outputKind === "byproduct" && (
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-900 text-stone-500">
+                    byproduct
+                  </span>
+                )}
                 <span className="ml-auto text-xs tabular-nums opacity-70">
                   {p.dailyAmount}/day
                 </span>
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {/* ----- Conditional production bonuses ----- */}
+      {productionBonuses.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Production bonuses</h2>
+          <ul className="space-y-2 text-sm">
+            {productionBonuses.map((b) => (
+              <li
+                key={b.id}
+                className="rounded border border-emerald-700/30 bg-emerald-700/5 p-3"
+              >
+                <div className="flex items-baseline gap-2 flex-wrap font-medium">
+                  <span>{formatCondition(b.condition)}</span>
+                  <span aria-hidden>→</span>
+                  <span className="text-emerald-700 dark:text-emerald-400">
+                    {formatProdEffect(b.effect)}
+                  </span>
+                </div>
+                {b.description && (
+                  <p className="text-xs opacity-70 mt-1">{b.description}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Alternate recipes ----- */}
+      {recipes.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Alternate modes</h2>
+          <p className="text-xs opacity-60 mb-3">
+            The supply chain above is the default. An instance can be switched
+            to one of these instead.
+          </p>
+          <ul className="space-y-3">
+            {recipes.map((r) => (
+              <li
+                key={r.id}
+                className="rounded border border-stone-200 dark:border-stone-800 p-4"
+              >
+                <p className="font-medium mb-1">{r.displayName}</p>
+                {r.description && (
+                  <p className="text-xs opacity-70 mb-2">{r.description}</p>
+                )}
+                <div className="text-xs flex flex-wrap gap-x-6 gap-y-1">
+                  {r.consumes.length > 0 && (
+                    <span>
+                      <span className="opacity-50">in: </span>
+                      {r.consumes
+                        .map((c) => `${c.dailyAmount}× ${c.tagName}`)
+                        .join(", ")}
+                    </span>
+                  )}
+                  <span>
+                    <span className="opacity-50">out: </span>
+                    {r.produces
+                      .map(
+                        (p) =>
+                          `${p.dailyAmount}× ${p.resourceName}${p.outputKind === "byproduct" ? " (byproduct)" : ""}`,
+                      )
+                      .join(", ")}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Tier-scaled output ----- */}
+      {tierOutput.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Output by settlement tier</h2>
+          <ul className="text-sm flex flex-wrap gap-x-6 gap-y-1">
+            {tierOutput.map((t) => (
+              <li key={t.tier} className="flex items-baseline gap-2">
+                <span className="text-stone-500">{prettyTerm(t.tier)}</span>
+                <span className="tabular-nums font-medium">
+                  {t.multiplierPct}%
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs opacity-50 mt-1">
+            Multiplier on this district&apos;s output. Tiers not listed produce
+            at 100%.
+          </p>
         </section>
       )}
 
@@ -459,6 +568,32 @@ function formatEffect(type: string, params: Record<string, unknown>): string {
     default:
       return `${type} ${JSON.stringify(params)}`;
   }
+}
+
+function formatCondition(cond: Record<string, unknown>): string {
+  if (typeof cond.input_tag === "string" && typeof cond.min_weight === "number") {
+    return `Input ${cond.input_tag} at weight ≥ ${cond.min_weight}`;
+  }
+  if (typeof cond.adjacent === "string") {
+    return `Next to a ${prettyTerm(cond.adjacent)}`;
+  }
+  if (typeof cond.tier_min === "string") {
+    return `Settlement at ${cond.tier_min}+ tier`;
+  }
+  if (typeof cond.biome === "string") {
+    return `On a ${prettyTerm(cond.biome)} tile`;
+  }
+  return JSON.stringify(cond);
+}
+
+function formatProdEffect(eff: Record<string, unknown>): string {
+  if (typeof eff.output_all_pct === "number") {
+    return `+${eff.output_all_pct}% to all output`;
+  }
+  if (typeof eff.output_resource === "string" && typeof eff.pct === "number") {
+    return `+${eff.pct}% ${eff.output_resource.replace(/^R:/, "").replace(/_/g, " ")}`;
+  }
+  return JSON.stringify(eff);
 }
 
 function formatBonus(type: string, value: number): string {

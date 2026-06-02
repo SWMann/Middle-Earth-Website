@@ -38,6 +38,7 @@ export const resourcesCatalogue = [
   { id: "R:Charcoal", displayName: "Charcoal", description: "Wood slow-burned to clean fuel. A charcoal-burner's craft.", foodValue: 0 },
   { id: "R:Mithril_Ore", displayName: "Mithril Ore", description: "True-silver. Found only where the deep mountains permit. Priceless.", foodValue: 0 },
   { id: "R:Mallorn", displayName: "Mallorn Timber", description: "Silver-barked, gold-leafed wood of Lothlórien. Stronger than oak, lighter than ash.", foodValue: 0 },
+  { id: "R:Slag", displayName: "Slag", description: "Glassy waste from smelting. Worthless to a smith, but cheap rubble-fill for foundations.", foodValue: 0 },
 ];
 
 // --- Resource → Tag weights ----------------------------------------------
@@ -62,6 +63,7 @@ export const resourceTagMappings = [
   { resourceId: "R:Mithril_Ore", tagId: "T:Mineral", weight: 3 },
   { resourceId: "R:Mallorn", tagId: "T:Building", weight: 4 },
   { resourceId: "R:Mallorn", tagId: "T:Fuel", weight: 1 },
+  { resourceId: "R:Slag", tagId: "T:Building", weight: 1 },
 ];
 
 // --- District types -------------------------------------------------------
@@ -461,6 +463,9 @@ export const factionDistrictRulesCatalogue = [
 export const districtConsumesCatalogue = [
   { districtTypeId: "iron_mine", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "mithril_mine", tagId: "T:Fuel", weightMin: 2, dailyAmount: 2 },
+  // Catalyst: the deep shafts must be re-shored with steel — a monthly,
+  // not daily, draw. consumptionPeriod marks it as a slow-burn input.
+  { districtTypeId: "mithril_mine", tagId: "T:Metal", weightMin: 3, dailyAmount: 1, consumptionPeriod: "monthly" },
   { districtTypeId: "bakery", tagId: "T:Grain", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "bakery", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "charcoal_burner", tagId: "T:Building", weightMin: 1, dailyAmount: 2 },
@@ -483,7 +488,82 @@ export const districtProducesCatalogue = [
   { districtTypeId: "bakery", resourceId: "R:Bread", dailyAmount: 8 },
   { districtTypeId: "charcoal_burner", resourceId: "R:Charcoal", dailyAmount: 2 },
   { districtTypeId: "smithy", resourceId: "R:Iron_Ingot", dailyAmount: 1 },
+  // Byproduct: every smelt leaves slag. Low value, but not nothing.
+  { districtTypeId: "smithy", resourceId: "R:Slag", dailyAmount: 1, outputKind: "byproduct" },
   { districtTypeId: "foundry", resourceId: "R:Steel", dailyAmount: 1 },
+];
+
+// --- Conditional production bonuses (the spec's bonuses_from) -------------
+
+export const districtProductionBonusesCatalogue = [
+  {
+    districtTypeId: "foundry",
+    condition: { input_tag: "T:Fuel", min_weight: 3 },
+    effect: { output_resource: "R:Steel", pct: 50 },
+    description: "Fed with coal — the hottest fuel — the foundry yields half again as much steel.",
+  },
+  {
+    districtTypeId: "smithy",
+    condition: { input_tag: "T:Fuel", min_weight: 2 },
+    effect: { output_all_pct: 20 },
+    description: "Charcoal or better burns cleaner than raw wood: +20% to all output.",
+  },
+  {
+    districtTypeId: "bakery",
+    condition: { input_tag: "T:Grain", min_weight: 3 },
+    effect: { output_resource: "R:Bread", pct: 50 },
+    description: "Premium grain (weight 3+) lifts bread output by half. (No such grain exists in the catalogue yet — the rule waits for one.)",
+  },
+  {
+    districtTypeId: "wheat_farm",
+    condition: { tier_min: "city" },
+    effect: { output_all_pct: 40 },
+    description: "City-scale irrigation, crop rotation, and mills lift yields sharply.",
+  },
+];
+
+// --- Alternate recipes (mode switching) ----------------------------------
+// The base district_consumes/produces are the DEFAULT mode. These are
+// alternates a player can switch a specific instance to.
+
+export const districtRecipesCatalogue = [
+  {
+    districtTypeId: "logging_camp",
+    recipeKey: "charcoal_prep",
+    displayName: "Charcoal Preparation",
+    description: "Burn part of the cut on site. Less timber out the gate, but charcoal alongside it.",
+    consumes: [] as { tagId: string; weightMin: number; dailyAmount: number }[],
+    produces: [
+      { resourceId: "R:Wood", dailyAmount: 1, outputKind: "primary" },
+      { resourceId: "R:Charcoal", dailyAmount: 1, outputKind: "primary" },
+    ],
+  },
+  {
+    districtTypeId: "smithy",
+    recipeKey: "refining",
+    displayName: "High-Throughput Refining",
+    description: "Run the forge hot and hard — double the ore and fuel for double the ingots. No slag savings.",
+    consumes: [
+      { tagId: "T:Metal_Ore", weightMin: 1, dailyAmount: 2 },
+      { tagId: "T:Fuel", weightMin: 1, dailyAmount: 2 },
+    ],
+    produces: [
+      { resourceId: "R:Iron_Ingot", dailyAmount: 2, outputKind: "primary" },
+      { resourceId: "R:Slag", dailyAmount: 2, outputKind: "byproduct" },
+    ],
+  },
+];
+
+// --- Tier-scaled output --------------------------------------------------
+
+export const districtTierOutputCatalogue = [
+  { districtTypeId: "wheat_farm", tier: "town", multiplierPct: 120 },
+  { districtTypeId: "wheat_farm", tier: "city", multiplierPct: 140 },
+  { districtTypeId: "wheat_farm", tier: "great_city", multiplierPct: 160 },
+  { districtTypeId: "wheat_farm", tier: "capital", multiplierPct: 180 },
+  { districtTypeId: "bakery", tier: "city", multiplierPct: 130 },
+  { districtTypeId: "bakery", tier: "capital", multiplierPct: 150 },
+  { districtTypeId: "smithy", tier: "city", multiplierPct: 125 },
 ];
 
 // --- Population composition by tier --------------------------------------

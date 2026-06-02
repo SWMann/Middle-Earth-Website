@@ -130,6 +130,7 @@ export const getDistrictConsumes = cache(async (districtTypeId: string) => {
       tagName: schema.tags.displayName,
       weightMin: schema.districtConsumes.weightMin,
       dailyAmount: schema.districtConsumes.dailyAmount,
+      consumptionPeriod: schema.districtConsumes.consumptionPeriod,
     })
     .from(schema.districtConsumes)
     .innerJoin(schema.tags, eq(schema.districtConsumes.tagId, schema.tags.id))
@@ -142,6 +143,7 @@ export const getDistrictProduces = cache(async (districtTypeId: string) => {
       resourceId: schema.districtProduces.resourceId,
       resourceName: schema.resources.displayName,
       dailyAmount: schema.districtProduces.dailyAmount,
+      outputKind: schema.districtProduces.outputKind,
     })
     .from(schema.districtProduces)
     .innerJoin(
@@ -270,6 +272,61 @@ export const getFactionRulesForDistrict = cache(
       );
   },
 );
+
+export const getDistrictProductionBonuses = cache(
+  async (districtTypeId: string) => {
+    return await db
+      .select()
+      .from(schema.districtProductionBonuses)
+      .where(eq(schema.districtProductionBonuses.districtTypeId, districtTypeId));
+  },
+);
+
+export const getDistrictTierOutput = cache(async (districtTypeId: string) => {
+  return await db
+    .select()
+    .from(schema.districtTierOutput)
+    .where(eq(schema.districtTierOutput.districtTypeId, districtTypeId));
+});
+
+/** Alternate recipes (modes) with their nested consumes + produces. */
+export const getDistrictRecipes = cache(async (districtTypeId: string) => {
+  const recipes = await db
+    .select()
+    .from(schema.districtRecipes)
+    .where(eq(schema.districtRecipes.districtTypeId, districtTypeId));
+
+  return await Promise.all(
+    recipes.map(async (r) => {
+      const [consumes, produces] = await Promise.all([
+        db
+          .select({
+            tagId: schema.recipeConsumes.tagId,
+            tagName: schema.tags.displayName,
+            weightMin: schema.recipeConsumes.weightMin,
+            dailyAmount: schema.recipeConsumes.dailyAmount,
+          })
+          .from(schema.recipeConsumes)
+          .innerJoin(schema.tags, eq(schema.recipeConsumes.tagId, schema.tags.id))
+          .where(eq(schema.recipeConsumes.recipeId, r.id)),
+        db
+          .select({
+            resourceId: schema.recipeProduces.resourceId,
+            resourceName: schema.resources.displayName,
+            dailyAmount: schema.recipeProduces.dailyAmount,
+            outputKind: schema.recipeProduces.outputKind,
+          })
+          .from(schema.recipeProduces)
+          .innerJoin(
+            schema.resources,
+            eq(schema.recipeProduces.resourceId, schema.resources.id),
+          )
+          .where(eq(schema.recipeProduces.recipeId, r.id)),
+      ]);
+      return { ...r, consumes, produces };
+    }),
+  );
+});
 
 // --- Unit types --------------------------------------------------------
 

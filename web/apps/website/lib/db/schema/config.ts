@@ -305,6 +305,13 @@ export const districtConsumes = config.table(
       .references(() => tags.id),
     weightMin: integer("weight_min").notNull().default(1),
     dailyAmount: integer("daily_amount").notNull(),
+    /**
+     * How often the input is consumed. 'daily' is the norm; 'weekly' /
+     * 'monthly' model catalysts and tools (a mine's timber supports, a
+     * forge's replacement dies) that are used up slowly rather than each
+     * tick. The mod prorates the cost over the period.
+     */
+    consumptionPeriod: text("consumption_period").notNull().default("daily"),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.districtTypeId, t.tagId] }),
@@ -321,9 +328,119 @@ export const districtProduces = config.table(
       .notNull()
       .references(() => resources.id),
     dailyAmount: integer("daily_amount").notNull(),
+    /**
+     * 'primary' = the district's main product. 'byproduct' = a secondary
+     * output (Slag from a Smithy, Ash from a Charcoal Burner). Byproducts
+     * are produced whenever the district runs but are usually low-value.
+     */
+    outputKind: text("output_kind").notNull().default("primary"),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.districtTypeId, t.resourceId] }),
+  }),
+);
+
+// --- District: conditional production bonuses ----------------------------
+
+/**
+ * The spec's `bonuses_from`. Each row is "when {condition} holds, apply
+ * {effect} to this district's production." Both sides are open jsonb so
+ * the rule language grows without migrations.
+ *
+ * condition shapes (examples):
+ *   { input_tag: 'T:Fuel', min_weight: 3 }   highest-grade fuel supplied
+ *   { adjacent: 'wheat_farm' }                a partner district nearby
+ *   { tier_min: 'city' }                      settlement is City or bigger
+ *   { biome: 'forest' }                       on a forest tile
+ * effect shapes:
+ *   { output_resource: 'R:Steel', pct: 50 }   +50% to one product
+ *   { output_all_pct: 25 }                    +25% to everything it makes
+ */
+export const districtProductionBonuses = config.table(
+  "district_production_bonuses",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    districtTypeId: text("district_type_id")
+      .notNull()
+      .references(() => districtTypes.id),
+    condition: jsonb("condition").$type<Record<string, unknown>>().notNull(),
+    effect: jsonb("effect").$type<Record<string, unknown>>().notNull(),
+    description: text("description").notNull().default(""),
+  },
+);
+
+// --- District: alternate recipes (mode switching) ------------------------
+
+/**
+ * A district's BASE inputs/outputs live in district_consumes /
+ * district_produces — that's the default mode. Rows here are ALTERNATE
+ * modes the player can switch a specific instance to (stored in
+ * game.districts.config_json.recipe). Each alternate has its own
+ * recipe_consumes / recipe_produces.
+ */
+export const districtRecipes = config.table("district_recipes", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  districtTypeId: text("district_type_id")
+    .notNull()
+    .references(() => districtTypes.id),
+  recipeKey: text("recipe_key").notNull(), // 'charcoal_prep', 'refining'
+  displayName: text("display_name").notNull(),
+  description: text("description").notNull().default(""),
+});
+
+export const recipeConsumes = config.table(
+  "recipe_consumes",
+  {
+    recipeId: bigserial("recipe_id", { mode: "number" })
+      .notNull()
+      .references(() => districtRecipes.id),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id),
+    weightMin: integer("weight_min").notNull().default(1),
+    dailyAmount: integer("daily_amount").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recipeId, t.tagId] }),
+  }),
+);
+
+export const recipeProduces = config.table(
+  "recipe_produces",
+  {
+    recipeId: bigserial("recipe_id", { mode: "number" })
+      .notNull()
+      .references(() => districtRecipes.id),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => resources.id),
+    dailyAmount: integer("daily_amount").notNull(),
+    outputKind: text("output_kind").notNull().default("primary"),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recipeId, t.resourceId] }),
+  }),
+);
+
+// --- District: tier-scaled output ----------------------------------------
+
+/**
+ * Production multiplier by the settlement's tier. A Wheat Farm in a City
+ * out-produces one in a Village (better techniques, irrigation, mills).
+ * multiplier_pct is applied to all of this district's outputs at that
+ * tier. Absent tiers default to 100%.
+ */
+export const districtTierOutput = config.table(
+  "district_tier_output",
+  {
+    districtTypeId: text("district_type_id")
+      .notNull()
+      .references(() => districtTypes.id),
+    tier: text("tier").notNull(),
+    multiplierPct: integer("multiplier_pct").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.districtTypeId, t.tier] }),
   }),
 );
 
