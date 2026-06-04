@@ -130,27 +130,22 @@ export const districtTypes = config.table("district_types", {
    */
   decorationThreshold: integer("decoration_threshold"),
 
+  /**
+   * Residential districts (Quarters) don't carry a fixed population cap —
+   * their cap is the sum of beds in the housing buildings the player
+   * actually raises inside them. When true, populationCapProvided is
+   * ignored and the mod computes cap from the BED components on the plot.
+   */
+  capFromHousing: boolean("cap_from_housing").notNull().default(false),
+
   /** Catch-all for anything not worth a column (wall stats, etc). */
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
 });
 
-// --- District: build cost (materials) ------------------------------------
-
-export const districtBuildCost = config.table(
-  "district_build_cost",
-  {
-    districtTypeId: text("district_type_id")
-      .notNull()
-      .references(() => districtTypes.id),
-    resourceId: text("resource_id")
-      .notNull()
-      .references(() => resources.id),
-    amount: integer("amount").notNull(),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.districtTypeId, t.resourceId] }),
-  }),
-);
+// NOTE: physical build materials are NOT prescribed in config — the bill of
+// materials is whatever blocks a player actually places. Only the abstract
+// coin/DP commissioning cost lives on district_types. (There is therefore no
+// district_build_cost / building_build_cost table.)
 
 // --- District: staffing by occupation class ------------------------------
 
@@ -488,25 +483,6 @@ export const buildingTypes = config.table("building_types", {
 
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
 });
-
-// --- Building: build cost (materials) ------------------------------------
-
-/** Materials to raise one building. Mirrors district_build_cost. */
-export const buildingBuildCost = config.table(
-  "building_build_cost",
-  {
-    buildingTypeId: text("building_type_id")
-      .notNull()
-      .references(() => buildingTypes.id),
-    resourceId: text("resource_id")
-      .notNull()
-      .references(() => resources.id),
-    amount: integer("amount").notNull(),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.buildingTypeId, t.resourceId] }),
-  }),
-);
 
 /**
  * Free-form tags on a building, used to satisfy 'themed' district
@@ -898,7 +874,6 @@ export type CombatTrait = typeof combatTraits.$inferSelect;
 export type UnitAbility = typeof unitAbilities.$inferSelect;
 export type BuildingType = typeof buildingTypes.$inferSelect;
 export type FunctionalComponent = typeof functionalComponents.$inferSelect;
-export type BuildingBuildCost = typeof buildingBuildCost.$inferSelect;
 export type BuildingTag = typeof buildingTags.$inferSelect;
 export type DecorationCriterion = typeof decorationCriteria.$inferSelect;
 export type TierDecorationThreshold = typeof tierDecorationThresholds.$inferSelect;

@@ -153,21 +153,6 @@ export const getDistrictProduces = cache(async (districtTypeId: string) => {
     .where(eq(schema.districtProduces.districtTypeId, districtTypeId));
 });
 
-export const getDistrictBuildCost = cache(async (districtTypeId: string) => {
-  return await db
-    .select({
-      resourceId: schema.districtBuildCost.resourceId,
-      resourceName: schema.resources.displayName,
-      amount: schema.districtBuildCost.amount,
-    })
-    .from(schema.districtBuildCost)
-    .innerJoin(
-      schema.resources,
-      eq(schema.districtBuildCost.resourceId, schema.resources.id),
-    )
-    .where(eq(schema.districtBuildCost.districtTypeId, districtTypeId));
-});
-
 export const getDistrictStaffing = cache(async (districtTypeId: string) => {
   return await db
     .select({
@@ -454,37 +439,6 @@ export const getBuildingType = cache(async (id: string) => {
     .from(schema.buildingTypes)
     .where(eq(schema.buildingTypes.id, id));
   return row ?? null;
-});
-
-export const getBuildingBuildCost = cache(async (buildingTypeId: string) => {
-  return await db
-    .select({
-      resourceId: schema.buildingBuildCost.resourceId,
-      resourceName: schema.resources.displayName,
-      amount: schema.buildingBuildCost.amount,
-    })
-    .from(schema.buildingBuildCost)
-    .innerJoin(
-      schema.resources,
-      eq(schema.buildingBuildCost.resourceId, schema.resources.id),
-    )
-    .where(eq(schema.buildingBuildCost.buildingTypeId, buildingTypeId));
-});
-
-/** All building material costs in one shot, for the buildings index. */
-export const getAllBuildingBuildCosts = cache(async () => {
-  return await db
-    .select({
-      buildingTypeId: schema.buildingBuildCost.buildingTypeId,
-      resourceId: schema.buildingBuildCost.resourceId,
-      resourceName: schema.resources.displayName,
-      amount: schema.buildingBuildCost.amount,
-    })
-    .from(schema.buildingBuildCost)
-    .innerJoin(
-      schema.resources,
-      eq(schema.buildingBuildCost.resourceId, schema.resources.id),
-    );
 });
 
 export const getBuildingTags = cache(async (buildingTypeId: string) => {

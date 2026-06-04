@@ -6,7 +6,6 @@ import {
   getDistrictConsumes,
   getDistrictProduces,
   getResourcesForTag,
-  getDistrictBuildCost,
   getDistrictStaffing,
   getDistrictEffects,
   getDistrictBiomeOutputs,
@@ -52,7 +51,6 @@ export default async function DistrictDetailPage({
   const [
     consumes,
     produces,
-    buildCost,
     staffing,
     effects,
     biomeOutputs,
@@ -69,7 +67,6 @@ export default async function DistrictDetailPage({
   ] = await Promise.all([
     getDistrictConsumes(district.id),
     getDistrictProduces(district.id),
-    getDistrictBuildCost(district.id),
     getDistrictStaffing(district.id),
     getDistrictEffects(district.id),
     getDistrictBiomeOutputs(district.id),
@@ -159,9 +156,20 @@ export default async function DistrictDetailPage({
           <Stat label="Build time" value={district.buildTimeDays > 0 ? `${district.buildTimeDays}d` : "instant"} />
           <Stat
             label="Pop cap +"
-            value={district.populationCapProvided.toString()}
+            value={
+              district.capFromHousing
+                ? "housing"
+                : district.populationCapProvided.toString()
+            }
           />
         </dl>
+        {district.capFromHousing && (
+          <p className="mt-3 text-xs opacity-60 max-w-xl">
+            This is a residential quarter — its population cap is the total of
+            the beds in the housing buildings you raise inside it, not a fixed
+            number.
+          </p>
+        )}
       </section>
 
       {/* ----- Build cost ----- */}
@@ -181,25 +189,11 @@ export default async function DistrictDetailPage({
             <Stat label="Coin" value="free" />
           )}
         </dl>
-        {buildCost.length > 0 && (
-          <div>
-            <p className="text-xs uppercase tracking-widest opacity-60 mb-1">
-              Materials
-            </p>
-            <ul className="text-sm flex flex-wrap gap-x-4 gap-y-1">
-              {buildCost.map((b) => (
-                <li key={b.resourceId}>
-                  <Link
-                    href={{ pathname: `/resources/${encodeURIComponent(b.resourceId)}` }}
-                    className="hover:underline"
-                  >
-                    {b.amount}× {b.resourceName}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <p className="text-xs opacity-50 max-w-xl">
+          Building materials aren&apos;t prescribed — the bill of resources is
+          whatever blocks you actually place. Only the coin/DP commissioning
+          cost above is fixed.
+        </p>
       </section>
 
       {/* ----- Construction requirements ----- */}

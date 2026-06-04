@@ -27,7 +27,6 @@ import {
   resourcesCatalogue,
   resourceTagMappings,
   districtTypesCatalogue,
-  districtBuildCostCatalogue,
   districtStaffingCatalogue,
   districtEffectsCatalogue,
   districtBiomeOutputsCatalogue,
@@ -36,7 +35,6 @@ import {
   factionDistrictRulesCatalogue,
   functionalComponentsCatalogue,
   buildingTypesCatalogue,
-  buildingBuildCostCatalogue,
   buildingTagsCatalogue,
   districtRequiredBuildingsCatalogue,
   districtRequiredComponentsCatalogue,
@@ -623,6 +621,7 @@ async function main() {
       uniqueScope: d.uniqueScope ?? null,
       mandatoryAtTier: d.mandatoryAtTier ?? null,
       upgradesFrom: d.upgradesFrom ?? null,
+      capFromHousing: d.capFromHousing ?? false,
       metadata: d.metadata ?? {},
     };
     await db
@@ -648,16 +647,13 @@ async function main() {
           uniqueScope: row.uniqueScope,
           mandatoryAtTier: row.mandatoryAtTier,
           upgradesFrom: row.upgradesFrom,
+          capFromHousing: row.capFromHousing,
           metadata: row.metadata,
         },
       });
   }
 
   // New district-relation tables: wipe + reinsert (small, deterministic).
-  await db.execute(sqlOp`DELETE FROM config.district_build_cost`);
-  for (const r of districtBuildCostCatalogue) {
-    await db.insert(schema.districtBuildCost).values(r);
-  }
   await db.execute(sqlOp`DELETE FROM config.district_staffing`);
   for (const r of districtStaffingCatalogue) {
     await db.insert(schema.districtStaffing).values(r);
@@ -688,8 +684,14 @@ async function main() {
   await db.execute(sqlOp`DELETE FROM config.district_required_components`);
   await db.execute(sqlOp`DELETE FROM config.district_required_buildings`);
   await db.execute(sqlOp`DELETE FROM config.building_provides_components`);
-  await db.execute(sqlOp`DELETE FROM config.building_build_cost`);
   await db.execute(sqlOp`DELETE FROM config.building_tags`);
+
+  // Housing rework: the old single-building residential DISTRICTS (hovel/
+  // cottage/house/manor) are now BUILDINGS instead. Drop the stale district
+  // rows — their child requirements were just wiped above, so no FK blocks.
+  await db.execute(
+    sqlOp`DELETE FROM config.district_types WHERE id IN ('hovel', 'cottage', 'house', 'manor')`,
+  );
 
   for (const fc of functionalComponentsCatalogue) {
     await db
@@ -723,9 +725,6 @@ async function main() {
         quantity: b.quantities?.[comp] ?? 1,
       });
     }
-  }
-  for (const bc of buildingBuildCostCatalogue) {
-    await db.insert(schema.buildingBuildCost).values(bc);
   }
   for (const bt of buildingTagsCatalogue) {
     await db.insert(schema.buildingTags).values(bt);

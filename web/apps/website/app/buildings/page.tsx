@@ -5,7 +5,6 @@ import {
   getAllBuildingComponentLinks,
   getBuildingDistrictUsage,
   getAllBuildingTags,
-  getAllBuildingBuildCosts,
   getAllBuildingVariantLinks,
 } from "@/lib/data/catalogue";
 
@@ -17,9 +16,16 @@ export const metadata = {
     "The structures players physically build. Districts are assembled from buildings, which in turn supply functional components.",
 };
 
-const CATEGORY_ORDER = ["structural", "functional", "landmark"];
+const CATEGORY_ORDER = [
+  "residential",
+  "structural",
+  "functional",
+  "landmark",
+];
 
 const CATEGORY_BLURB: Record<string, string> = {
+  residential:
+    "Housing. Each provides beds in quantity — a residential quarter's population cap is the sum of the beds inside it. Fill a quarter with whatever housing (and culture variants) you like.",
   structural:
     "The anchor of a district — there is usually exactly one, and it defines the district's identity.",
   functional:
@@ -36,14 +42,13 @@ function footprint(min: number | null, max: number | null): string | null {
 }
 
 export default async function BuildingsIndexPage() {
-  const [buildings, components, links, usage, tags, costs, variants] =
+  const [buildings, components, links, usage, tags, variants] =
     await Promise.all([
       getAllBuildingTypes(),
       getAllFunctionalComponents(),
       getAllBuildingComponentLinks(),
       getBuildingDistrictUsage(),
       getAllBuildingTags(),
-      getAllBuildingBuildCosts(),
       getAllBuildingVariantLinks(),
     ]);
 
@@ -78,15 +83,6 @@ export default async function BuildingsIndexPage() {
     if (!tagsByBuilding.has(t.buildingTypeId))
       tagsByBuilding.set(t.buildingTypeId, []);
     tagsByBuilding.get(t.buildingTypeId)!.push(t.tag);
-  }
-
-  const costByBuilding = new Map<string, { name: string; amount: number }[]>();
-  for (const c of costs) {
-    if (!costByBuilding.has(c.buildingTypeId))
-      costByBuilding.set(c.buildingTypeId, []);
-    costByBuilding
-      .get(c.buildingTypeId)!
-      .push({ name: c.resourceName, amount: c.amount });
   }
 
   const variantsByBuilding = new Map<string, string[]>();
@@ -146,7 +142,6 @@ export default async function BuildingsIndexPage() {
                 const provides = providesByBuilding.get(b.id) ?? [];
                 const usedBy = usageByBuilding.get(b.id) ?? [];
                 const bTags = tagsByBuilding.get(b.id) ?? [];
-                const bCost = costByBuilding.get(b.id) ?? [];
                 const bVariants = variantsByBuilding.get(b.id) ?? [];
                 const fp = footprint(b.minFootprintBlocks, b.maxFootprintBlocks);
                 return (
@@ -203,16 +198,8 @@ export default async function BuildingsIndexPage() {
                       </div>
                     )}
 
-                    {(bTags.length > 0 || bCost.length > 0) && (
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
-                        {bCost.length > 0 && (
-                          <span className="opacity-70">
-                            <span className="opacity-60">Build: </span>
-                            {bCost
-                              .map((c) => `${c.amount}× ${c.name}`)
-                              .join(", ")}
-                          </span>
-                        )}
+                    {bTags.length > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
                         {bTags.map((t) => (
                           <span
                             key={t}
