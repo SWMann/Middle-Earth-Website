@@ -630,6 +630,40 @@ export const functionalComponents = config.table("functional_components", {
 });
 
 /**
+ * How the in-game scanner recognises a functional component in the world.
+ * Kept in config (not hardcoded in the mod) so the mappings can be retuned
+ * for the modpack's custom blocks without a mod redeploy — mirroring how the
+ * decoration weights and tier thresholds live in config. A component may have
+ * several rows (a FORGE is a furnace OR blast_furnace OR smoker).
+ */
+export const componentBlocks = config.table(
+  "component_blocks",
+  {
+    componentId: text("component_id")
+      .notNull()
+      .references(() => functionalComponents.id),
+    /** 'block_class' (Yarn class, e.g. BedBlock) | 'block_id' (minecraft:smoker) | 'block_tag'. */
+    matchType: text("match_type").notNull(),
+    matchValue: text("match_value").notNull(),
+    note: text("note").notNull().default(""),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.componentId, t.matchType, t.matchValue] }),
+  }),
+);
+
+/**
+ * Material-quality tier of a block (for the material_quality criterion) and
+ * whether it counts as decorative (for the decoration_density criterion).
+ * Anything not listed defaults to 'mid' / non-decorative in the scorer.
+ */
+export const blockTiers = config.table("block_tiers", {
+  blockId: text("block_id").primaryKey(), // 'minecraft:cobblestone'
+  tier: text("tier").notNull().default("mid"), // 'low' | 'mid' | 'high'
+  decorative: boolean("decorative").notNull().default(false),
+});
+
+/**
  * Which components a building inherently provides, and HOW MANY. A
  * Bunkhouse provides 8× BED; a Cottage provides 1. A district's component
  * requirement is met by summing quantities across the buildings on its plot.
@@ -1040,6 +1074,8 @@ export type CombatTrait = typeof combatTraits.$inferSelect;
 export type UnitAbility = typeof unitAbilities.$inferSelect;
 export type BuildingType = typeof buildingTypes.$inferSelect;
 export type FunctionalComponent = typeof functionalComponents.$inferSelect;
+export type ComponentBlock = typeof componentBlocks.$inferSelect;
+export type BlockTier = typeof blockTiers.$inferSelect;
 export type BuildingTag = typeof buildingTags.$inferSelect;
 export type BuildingOutput = typeof buildingOutputs.$inferSelect;
 export type BuildingEffect = typeof buildingEffects.$inferSelect;

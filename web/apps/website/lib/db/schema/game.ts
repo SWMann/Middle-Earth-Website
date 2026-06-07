@@ -182,6 +182,73 @@ export const districts = game.table("districts", {
   config: jsonb("config").$type<Record<string, unknown>>().default({}),
 });
 
+// --- Plots (decoration scanner + build validator) ------------------------
+
+/**
+ * A plot is the block-space region of a player's district build. It is the
+ * shared contract between two authoring paths (an in-game two-corner command,
+ * and the web floorplanner) and the Andúril scanner that reads the world,
+ * scores its decoration (0–100 vs config.decoration_criteria), validates the
+ * district spec (required components + footprint), and gates it by settlement
+ * tier. Written by the mod (and, in dev, the seed); the website reads it and
+ * mutates via the bridge.
+ *
+ * Geometry: the axis-aligned bounding box is ALWAYS present (the scanner
+ * iterates it). footprintCells optionally refines a non-rectangular plot.
+ */
+export const plots = game.table("plots", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+
+  // Linkage (both nullable: a plot may stand alone or tie to a district).
+  settlementId: bigint("settlement_id", { mode: "number" }).references(
+    () => settlements.id,
+  ),
+  districtId: bigint("district_id", { mode: "number" }).references(
+    () => districts.id,
+  ),
+  /** The district type to validate against (config.district_types.id; soft FK). */
+  districtType: text("district_type").notNull(),
+  /** Resolves the culture for the theme_adherence criterion (soft FK). */
+  factionId: text("faction_id"),
+  source: text("source").notNull().default("command"), // 'command' | 'floorplanner'
+  label: text("label").notNull().default(""),
+
+  // --- Block-space geometry (the contract the scanner reads) ---
+  minX: integer("min_x").notNull(),
+  minY: integer("min_y").notNull(),
+  minZ: integer("min_z").notNull(),
+  maxX: integer("max_x").notNull(),
+  maxY: integer("max_y").notNull(),
+  maxZ: integer("max_z").notNull(),
+  /** Optional refinement: the XZ block cells the plot actually occupies. */
+  footprintCells: jsonb("footprint_cells").$type<[number, number][]>(),
+
+  // --- Authoring (floorplanner; null for 'command' plots) ---
+  transform: jsonb("transform").$type<Record<string, unknown>>(),
+  underlayRef: text("underlay_ref"),
+  /** Planned building footprints the validator compares the world against. */
+  layout: jsonb("layout").$type<Record<string, unknown>>(),
+
+  // --- Scan results (null until the first scan) ---
+  decorationScore: integer("decoration_score"),
+  criteriaBreakdown: jsonb("criteria_breakdown").$type<Record<string, number>>(),
+  componentResult: jsonb("component_result").$type<Record<string, unknown>>(),
+  footprintResult: jsonb("footprint_result").$type<Record<string, unknown>>(),
+  /** unscanned|pending_spot|pending_full|auto_approved|approved|rejected */
+  reviewStatus: text("review_status").notNull().default("unscanned"),
+  reviewMode: text("review_mode"), // 'auto' | 'light' | 'spot' | 'full'
+  reviewedBy: text("reviewed_by"), // admin discordId
+  reviewNote: text("review_note").notNull().default(""),
+  scannedAt: timestamp("scanned_at", { withTimezone: true }),
+  scanAuditEventId: bigint("scan_audit_event_id", { mode: "number" }),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Plot = typeof plots.$inferSelect;
+export type NewPlot = typeof plots.$inferInsert;
+
 // --- Units ---------------------------------------------------------------
 
 /**

@@ -45,6 +45,8 @@ import {
   districtFootprintCatalogue,
   decorationCriteriaCatalogue,
   tierDecorationThresholdsCatalogue,
+  componentBlocksCatalogue,
+  blockTiersCatalogue,
   culturesCatalogue,
   culturePalettesCatalogue,
   buildingVariantsCatalogue,
@@ -857,6 +859,21 @@ async function main() {
       .onConflictDoUpdate({
         target: schema.tierDecorationThresholds.tier,
         set: { minScore: td.minScore, reviewMode: td.reviewMode, note: td.note },
+      });
+  }
+
+  // Component → block detection rules + block material tiers (scanner config).
+  await db.execute(sqlOp`DELETE FROM config.component_blocks`);
+  for (const cb of componentBlocksCatalogue) {
+    await db.insert(schema.componentBlocks).values(cb);
+  }
+  for (const bt of blockTiersCatalogue) {
+    await db
+      .insert(schema.blockTiers)
+      .values(bt)
+      .onConflictDoUpdate({
+        target: schema.blockTiers.blockId,
+        set: { tier: bt.tier, decorative: bt.decorative },
       });
   }
 

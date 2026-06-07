@@ -1099,6 +1099,97 @@ export const tierDecorationThresholdsCatalogue = [
   { tier: "capital", minScore: null, reviewMode: "full", note: "Always full staff review; score is informational." },
 ];
 
+// --- Component → block detection rules (for the in-game scanner) ----------
+// Maps each functional component to the blocks that satisfy it, so the mod's
+// ComponentDetector is tuned from the DB (no redeploy to retune). matchType:
+//   'block_class' — Yarn class name; matches the block and its subclasses.
+//   'block_id'    — exact minecraft: (or modpack) block id.
+//   'block_tag'   — a block tag id (matched server-side via the tag registry).
+// Composite components (WELL, STABLE_STALL) list their *trigger* block; the
+// detector confirms them with a neighbourhood scan. Proxies for components
+// with no clean vanilla block (ALTAR, TABLE, ARROW_RACK) are flagged
+// low-confidence in the note and bias the plot toward staff review.
+
+export const componentBlocksCatalogue = [
+  // BED — every vanilla bed colour extends BedBlock.
+  { componentId: "BED", matchType: "block_class", matchValue: "BedBlock", note: "Any bed colour." },
+  // DOOR — wooden + metal doors (not trapdoors).
+  { componentId: "DOOR", matchType: "block_class", matchValue: "DoorBlock", note: "Any full-height door." },
+  // STORAGE — chests + barrels.
+  { componentId: "STORAGE", matchType: "block_id", matchValue: "minecraft:chest", note: "" },
+  { componentId: "STORAGE", matchType: "block_id", matchValue: "minecraft:trapped_chest", note: "" },
+  { componentId: "STORAGE", matchType: "block_id", matchValue: "minecraft:barrel", note: "" },
+  // COOKING — food-prep heat sources.
+  { componentId: "COOKING", matchType: "block_id", matchValue: "minecraft:smoker", note: "" },
+  { componentId: "COOKING", matchType: "block_id", matchValue: "minecraft:furnace", note: "" },
+  { componentId: "COOKING", matchType: "block_id", matchValue: "minecraft:campfire", note: "Counts as both cooking and hearth." },
+  // HEARTH — an open fire. CampfireBlock covers normal + soul campfires.
+  { componentId: "HEARTH", matchType: "block_class", matchValue: "CampfireBlock", note: "Open fire." },
+  // ANVIL — all three damage states extend AnvilBlock.
+  { componentId: "ANVIL", matchType: "block_class", matchValue: "AnvilBlock", note: "Any anvil." },
+  // FORGE — high-heat smelting.
+  { componentId: "FORGE", matchType: "block_id", matchValue: "minecraft:blast_furnace", note: "" },
+  { componentId: "FORGE", matchType: "block_id", matchValue: "minecraft:furnace", note: "Lit furnace as a forge." },
+  // ALTAR — no clean vanilla altar; enchanting table is the stand-in.
+  { componentId: "ALTAR", matchType: "block_id", matchValue: "minecraft:enchanting_table", note: "LOW-CONFIDENCE proxy — wire the modpack altar id and review." },
+  // ARROW_RACK — fletching table as a martial-rack stand-in.
+  { componentId: "ARROW_RACK", matchType: "block_id", matchValue: "minecraft:fletching_table", note: "LOW-CONFIDENCE proxy — wire the modpack arrow-rack id and review." },
+  // STABLE_STALL — composite: a fence-gated bay with hay. Trigger on either;
+  // the detector confirms a stall by the pairing in a neighbourhood scan.
+  { componentId: "STABLE_STALL", matchType: "block_id", matchValue: "minecraft:hay_block", note: "COMPOSITE trigger — confirmed with a neighbouring fence gate." },
+  { componentId: "STABLE_STALL", matchType: "block_class", matchValue: "FenceGateBlock", note: "COMPOSITE trigger — confirmed with neighbouring hay." },
+  // WELL — composite: a water column enclosed by a wall/ring. Trigger on
+  // water; the detector confirms an enclosing rim in a neighbourhood scan.
+  { componentId: "WELL", matchType: "block_id", matchValue: "minecraft:water", note: "COMPOSITE trigger — confirmed by an enclosing wall ring." },
+  // LECTERN.
+  { componentId: "LECTERN", matchType: "block_class", matchValue: "LecternBlock", note: "" },
+  // TABLE — no clean vanilla table; crafting table is the stand-in.
+  { componentId: "TABLE", matchType: "block_id", matchValue: "minecraft:crafting_table", note: "LOW-CONFIDENCE proxy — wire the modpack table id and review." },
+  // BANNER — AbstractBannerBlock covers standing + wall banners, all colours.
+  { componentId: "BANNER", matchType: "block_class", matchValue: "AbstractBannerBlock", note: "Standing or wall banner, any colour." },
+];
+
+// --- Block material tiers + the decorative set ---------------------------
+// Feeds two criteria: material_quality (tier-weighted average over structural
+// blocks) and decoration_density (count of `decorative` blocks per area).
+// Anything absent here defaults to tier 'mid', decorative=false — so we list
+// only the cheap ('low'), the prestige ('high'), and the decorative blocks.
+
+export const blockTiersCatalogue = [
+  // --- Low tier: cheap bulk fill. Drags material_quality down. ----------
+  ...[
+    "minecraft:dirt", "minecraft:coarse_dirt", "minecraft:rooted_dirt", "minecraft:grass_block",
+    "minecraft:gravel", "minecraft:sand", "minecraft:red_sand", "minecraft:clay",
+    "minecraft:mud", "minecraft:packed_mud", "minecraft:cobblestone", "minecraft:mossy_cobblestone",
+    "minecraft:cobbled_deepslate", "minecraft:netherrack", "minecraft:dripstone_block",
+  ].map((blockId) => ({ blockId, tier: "low", decorative: false })),
+
+  // --- High tier: dressed / prestige stone + metal. Rewards quality. ----
+  ...[
+    "minecraft:smooth_quartz", "minecraft:quartz_block", "minecraft:quartz_bricks",
+    "minecraft:chiseled_quartz_block", "minecraft:polished_granite", "minecraft:polished_diorite",
+    "minecraft:polished_andesite", "minecraft:polished_deepslate", "minecraft:deepslate_bricks",
+    "minecraft:deepslate_tiles", "minecraft:chiseled_deepslate", "minecraft:polished_blackstone",
+    "minecraft:polished_blackstone_bricks", "minecraft:chiseled_polished_blackstone",
+    "minecraft:chiseled_stone_bricks", "minecraft:calcite", "minecraft:gold_block",
+    "minecraft:copper_block", "minecraft:cut_copper", "minecraft:purpur_block",
+    "minecraft:prismarine_bricks", "minecraft:dark_prismarine",
+  ].map((blockId) => ({ blockId, tier: "high", decorative: false })),
+
+  // --- Decorative set: non-structural detailing. Drives decoration_density.
+  // Most are mid-tier; sea_lantern is a high-tier light, candles are cheap.
+  ...[
+    "minecraft:flower_pot", "minecraft:lantern", "minecraft:soul_lantern", "minecraft:torch",
+    "minecraft:soul_torch", "minecraft:candle", "minecraft:bookshelf", "minecraft:chiseled_bookshelf",
+    "minecraft:bell", "minecraft:chain", "minecraft:end_rod", "minecraft:glow_lichen",
+    "minecraft:vine", "minecraft:azalea", "minecraft:flowering_azalea", "minecraft:hanging_roots",
+    "minecraft:brewing_stand", "minecraft:cauldron", "minecraft:cake", "minecraft:poppy",
+    "minecraft:dandelion", "minecraft:cornflower", "minecraft:azure_bluet", "minecraft:oxeye_daisy",
+  ].map((blockId) => ({ blockId, tier: "mid", decorative: true })),
+  // sea_lantern is both a high-tier block and decorative.
+  { blockId: "minecraft:sea_lantern", tier: "high", decorative: true },
+];
+
 // --- Cultures (architectural styles) -------------------------------------
 // Cosmetic only: cultures change a building's NAME, flavour, and approved
 // block palette — never its components or district role. parentCultureId
