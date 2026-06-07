@@ -1,8 +1,18 @@
 package org.middleearth.anduril;
 
 import net.fabricmc.api.DedicatedServerModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.MinecraftServer;
+import org.middleearth.anduril.scan.ConfigReader;
+import org.middleearth.anduril.scan.PlotRepository;
+import org.middleearth.anduril.scan.PlotScanner;
+import org.middleearth.anduril.scan.ScanCommands;
+import org.middleearth.anduril.scan.ScanService;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Server-side Andúril.
@@ -24,6 +34,8 @@ import net.minecraft.server.MinecraftServer;
 public class AndurilServer implements DedicatedServerModInitializer {
     private Database database;
     private HttpApi httpApi;
+    private ConfigReader configReader;
+    private ExecutorService scanIo;
 
     @Override
     public void onInitializeServer() {
@@ -55,6 +67,30 @@ public class AndurilServer implements DedicatedServerModInitializer {
             // HTTP failure is non-fatal: the MC server keeps running and
             // the website will see "bridge offline" until we restart.
         }
+
+        // Decoration scanner: a dedicated IO pool keeps Neon writes off the
+        // tick, a cached ConfigReader keeps the hot path in memory, and the
+        // /anduril command registers during world load (after this event).
+        scanIo = Executors.newFixedThreadPool(2, r -> {
+            Thread t = new Thread(r, "anduril-scan-io");
+            t.setDaemon(true);
+            return t;
+        });
+        configReader = new ConfigReader(database);
+        ScanCommands scanCommands = new ScanCommands(
+            server, configReader, new ScanService(), new PlotScanner(),
+            new PlotRepository(database), scanIo);
+        CommandRegistrationCallback.EVENT.register(
+            (dispatcher, registryAccess, environment) -> scanCommands.register(dispatcher));
+        // Warm the config cache off-thread so the first scan never blocks.
+        scanIo.submit(() -> {
+            try {
+                configReader.refresh();
+            } catch (Exception e) {
+                Anduril.LOGGER.warn("Initial scan-config warm failed: {}", e.getMessage());
+            }
+        });
+
         // TODO: register tick scheduler.
     }
 
@@ -67,6 +103,20 @@ public class AndurilServer implements DedicatedServerModInitializer {
         if (httpApi != null) {
             httpApi.stop();
             httpApi = null;
+        }
+        // Drain in-flight scan persists before the DB pool closes under them.
+        if (scanIo != null) {
+            scanIo.shutdown();
+            try {
+                if (!scanIo.awaitTermination(5, TimeUnit.SECONDS)) {
+                    Anduril.LOGGER.warn("Scan IO pool did not drain in 5s; forcing shutdown.");
+                    scanIo.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            scanIo = null;
+            configReader = null;
         }
         if (database != null) {
             database.close();
