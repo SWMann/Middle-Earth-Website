@@ -1,7 +1,6 @@
 import type { PlannerCatalogue } from "@/lib/data/planner";
 
-// Settlement tiers, smallest → largest. Index gives the ordering used for
-// "available at this tier" gates and tier-output scaling.
+// Settlement tiers, smallest → largest.
 export const TIER_ORDER = [
   "hamlet",
   "steading",
@@ -25,8 +24,7 @@ export function prettyTier(t: string): string {
     .join(" ");
 }
 
-// The canonical class mix a settlement of each tier tends toward — shown as
-// a reference target next to the plan's own (housing-derived) composition.
+// The canonical class mix a settlement of each tier tends toward.
 export const POPULATION_COMPOSITION_BY_TIER: Record<
   string,
   Record<string, number>
@@ -69,28 +67,22 @@ const add = (m: Num, k: string, v: number) => {
   m[k] = (m[k] ?? 0) + v;
 };
 
+export const HOUSING_CLASS_ORDER = ["peasant", "artisan", "merchant", "scholar", "noble"];
+
 /** The flexible building slot of a district (the one with a range), if any. */
 export function primarySlot(
   cat: PlannerCatalogue,
   districtTypeId: string,
 ): { min: number; max: number } | null {
-  const rows = cat.requiredBuildings.filter(
-    (r) => r.districtTypeId === districtTypeId,
-  );
-  // Prefer a themed (residential) slot, else any row with a maxCount range.
+  const rows = cat.requiredBuildings.filter((r) => r.districtTypeId === districtTypeId);
   const themed = rows.find((r) => r.kind === "themed");
-  const ranged =
-    themed ?? rows.find((r) => r.maxCount != null && r.maxCount > r.count);
+  const ranged = themed ?? rows.find((r) => r.maxCount != null && r.maxCount > r.count);
   if (!ranged) return null;
   return { min: ranged.count, max: ranged.maxCount ?? ranged.count };
 }
 
 /** Housing buildings whose class is ≤ the quarter's class ceiling. */
-const HOUSING_CLASS_ORDER = ["peasant", "artisan", "merchant", "scholar", "noble"];
-export function allowedHousing(
-  cat: PlannerCatalogue,
-  populationClass: string | null,
-) {
+export function allowedHousing(cat: PlannerCatalogue, populationClass: string | null) {
   const ceiling = populationClass
     ? HOUSING_CLASS_ORDER.indexOf(populationClass)
     : HOUSING_CLASS_ORDER.length - 1;
@@ -105,6 +97,7 @@ export function allowedHousing(
 // --- The preview computation --------------------------------------------
 
 export type Preview = ReturnType<typeof computePreview>;
+export type DistrictContribution = Preview["perDistrict"][number];
 
 export function computePreview(plan: Plan, cat: PlannerCatalogue) {
   const dtById = new Map(cat.districtTypes.map((d) => [d.id, d]));
@@ -113,122 +106,181 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
   const bedsById = new Map(cat.buildingTypes.map((b) => [b.id, b.beds]));
   const classOf = new Map(cat.buildingTypes.map((b) => [b.id, b.housingClass]));
   const unitById = new Map(cat.unitTypes.map((u) => [u.id, u]));
-
+  const tagName = (id: string) => cat.tags.find((t) => t.id === id)?.displayName ?? id;
+  const resName = (id: string) => resById.get(id)?.displayName ?? id;
   const occMeta = (id: string, key: string): number => {
     const m = (occById.get(id)?.metadata ?? {}) as Record<string, unknown>;
     const v = m[key];
     return typeof v === "number" ? v : 0;
   };
 
-  let popCap = 0;
-  const popByClass: Num = {};
-  const staffDemand: Num = {};
-  const production: Num = {}; // resourceId -> per day
-  const consumption: Num = {}; // tagId -> per day
-  let taxIncome = 0;
-  let coinFromEffects = 0;
-  let dpBase = 0;
-  let dpMultPct = 0; // from scholar scale bonuses
-  let upkeepCoin = 0;
-  let prestige = 0;
-  let buildCoin = 0;
-  let buildDp = 0;
-  let footMin = 0;
-  let footMax = 0;
+  // resourceId -> the tags it satisfies (for supply-chain reconciliation).
+  const tagsByResource = new Map<string, Set<string>>();
+  for (const rt of cat.resourceTags) {
+    if (!tagsByResource.has(rt.resourceId)) tagsByResource.set(rt.resourceId, new Set());
+    tagsByResource.get(rt.resourceId)!.add(rt.tagId);
+  }
 
   const tier = plan.tier;
 
-  for (const inst of plan.districts) {
-    const dt = dtById.get(inst.districtTypeId);
-    if (!dt) continue;
+  // ---- Per-district contributions ----
+  const perDistrict = plan.districts
+    .map((inst) => {
+      const dt = dtById.get(inst.districtTypeId);
+      if (!dt) return null;
 
-    buildCoin += dt.buildCoinCost;
-    buildDp += dt.buildDpCost;
-    footMin += dt.minFootprintBlocks ?? 0;
-    footMax += dt.maxFootprintBlocks ?? dt.minFootprintBlocks ?? 0;
+      const totalBuildings = inst.buildings.reduce((s, b) => s + b.count, 0);
+      const slot = primarySlot(cat, dt.id);
+      const minBuildings = slot?.min ?? 0;
+      const extra = Math.max(0, totalBuildings - minBuildings);
 
-    const totalBuildings = inst.buildings.reduce((s, b) => s + b.count, 0);
-    const slot = primarySlot(cat, dt.id);
-    const minBuildings = slot?.min ?? 0;
-    const extra = Math.max(0, totalBuildings - minBuildings);
+      const bonuses = cat.scaleBonuses.filter((s) => s.districtTypeId === dt.id);
+      const bonusPct = (type: string): number => {
+        const b = bonuses.find((x) => x.bonusType === type);
+        if (!b) return 0;
+        const cap = b.maxBuildings ?? (slot ? slot.max - slot.min : extra);
+        return b.perBuilding * Math.min(extra, cap);
+      };
+      const taxScalePct = bonusPct("tax_yield_pct");
+      const outputScalePct = bonusPct("output_pct");
+      const upkeepRedPct = bonusPct("upkeep_reduction_pct");
+      const dpMultPct = bonusPct("dp_yield_pct");
+      const prestige = bonusPct("prestige");
+      const scale = bonuses
+        .map((b) => ({ bonusType: b.bonusType, totalPct: bonusPct(b.bonusType) }))
+        .filter((s) => s.totalPct !== 0);
 
-    // Scale dividend factors for this instance.
-    const bonuses = cat.scaleBonuses.filter((s) => s.districtTypeId === dt.id);
-    const bonusPct = (type: string): number => {
-      const b = bonuses.find((x) => x.bonusType === type);
-      if (!b) return 0;
-      const cap = b.maxBuildings ?? (slot ? slot.max - slot.min : extra);
-      return b.perBuilding * Math.min(extra, cap);
-    };
-    const taxScale = 1 + bonusPct("tax_yield_pct") / 100;
-    const outputScale = 1 + bonusPct("output_pct") / 100;
-    const upkeepScale = 1 - bonusPct("upkeep_reduction_pct") / 100;
-    dpMultPct += bonusPct("dp_yield_pct");
-    prestige += bonusPct("prestige");
-
-    // Population from housing.
-    if (dt.capFromHousing) {
-      for (const b of inst.buildings) {
-        const beds = (bedsById.get(b.buildingTypeId) ?? 0) * b.count;
-        popCap += beds;
-        const cls = classOf.get(b.buildingTypeId);
-        if (cls) add(popByClass, cls, beds);
+      const dPop: Num = {};
+      let dPopCap = 0;
+      let dTax = 0;
+      let dTaxBase = 0;
+      if (dt.capFromHousing) {
+        for (const b of inst.buildings) {
+          const beds = (bedsById.get(b.buildingTypeId) ?? 0) * b.count;
+          const cls = classOf.get(b.buildingTypeId);
+          dPopCap += beds;
+          if (cls) {
+            add(dPop, cls, beds);
+            const base = beds * occMeta(cls, "tax_yield_per_capita");
+            dTaxBase += base;
+            dTax += base * (1 + taxScalePct / 100);
+          }
+        }
+      } else {
+        dPopCap += dt.populationCapProvided;
       }
-    } else {
-      popCap += dt.populationCapProvided;
-    }
 
-    // Tax from this district's housed population (with its density dividend).
-    if (dt.capFromHousing) {
-      for (const b of inst.buildings) {
-        const beds = (bedsById.get(b.buildingTypeId) ?? 0) * b.count;
-        const cls = classOf.get(b.buildingTypeId);
-        if (cls) taxIncome += beds * occMeta(cls, "tax_yield_per_capita") * taxScale;
+      const staffDemand: Num = {};
+      for (const s of cat.staffing.filter((x) => x.districtTypeId === dt.id))
+        add(staffDemand, s.classId, s.count);
+
+      const tierMultRow = cat.tierOutput.find(
+        (t) => t.districtTypeId === dt.id && t.tier === tier,
+      );
+      const tierMult = (tierMultRow?.multiplierPct ?? 100) / 100;
+      const dProd: Num = {};
+      for (const p of cat.produces.filter((x) => x.districtTypeId === dt.id))
+        add(dProd, p.resourceId, p.dailyAmount * tierMult * (1 + outputScalePct / 100));
+
+      const dCons: Num = {};
+      for (const c of cat.consumes.filter((x) => x.districtTypeId === dt.id))
+        if (c.consumptionPeriod === "daily") add(dCons, c.tagId, c.dailyAmount);
+
+      let dEffectCoin = 0;
+      let dDpBase = 0;
+      for (const e of cat.effects.filter((x) => x.districtTypeId === dt.id)) {
+        const amount = Number((e.params as Record<string, unknown>)?.amount ?? 0);
+        if (e.effectType === "coin_per_day") dEffectCoin += amount;
+        if (e.effectType === "dp_per_day") dDpBase += amount;
       }
-    }
 
-    // Staffing demand (skilled bodies the district needs to run).
-    const staff = cat.staffing.filter((s) => s.districtTypeId === dt.id);
-    for (const s of staff) add(staffDemand, s.classId, s.count);
+      let dFood = 0;
+      for (const [resId, amt] of Object.entries(dProd))
+        dFood += amt * (resById.get(resId)?.foodValue ?? 0);
 
-    // Production (tier-scaled, density-scaled).
-    const tierMultRow = cat.tierOutput.find(
-      (t) => t.districtTypeId === dt.id && t.tier === tier,
-    );
-    const tierMult = (tierMultRow?.multiplierPct ?? 100) / 100;
-    for (const p of cat.produces.filter((x) => x.districtTypeId === dt.id)) {
-      add(production, p.resourceId, p.dailyAmount * tierMult * outputScale);
-    }
+      return {
+        uid: inst.uid,
+        districtTypeId: dt.id,
+        name: dt.displayName,
+        category: dt.category,
+        popCap: dPopCap,
+        popByClass: dPop,
+        totalBuildings,
+        slotMin: slot?.min ?? null,
+        slotMax: slot?.max ?? null,
+        taxCoin: dTax,
+        taxCoinBase: dTaxBase,
+        effectCoin: dEffectCoin,
+        upkeepCoin: dt.upkeepCoinDaily * (1 - upkeepRedPct / 100),
+        foodProduced: dFood,
+        dpBase: dDpBase,
+        dpMultPct,
+        prestige,
+        production: Object.entries(dProd)
+          .map(([resourceId, amount]) => ({ resourceId, name: resName(resourceId), amount }))
+          .sort((a, b) => b.amount - a.amount),
+        consumption: Object.entries(dCons)
+          .map(([tagId, amount]) => ({ tagId, name: tagName(tagId), amount }))
+          .sort((a, b) => b.amount - a.amount),
+        staffDemand,
+        scale,
+        coinNet: dTax + dEffectCoin - dt.upkeepCoinDaily * (1 - upkeepRedPct / 100),
+        buildCoin: dt.buildCoinCost,
+        buildDp: dt.buildDpCost,
+        footMin: dt.minFootprintBlocks ?? 0,
+        footMax: dt.maxFootprintBlocks ?? dt.minFootprintBlocks ?? 0,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
 
-    // Consumption (input demand, by tag).
-    for (const c of cat.consumes.filter((x) => x.districtTypeId === dt.id)) {
-      if (c.consumptionPeriod === "daily") add(consumption, c.tagId, c.dailyAmount);
-    }
+  // ---- Aggregate ----
+  const popByClass: Num = {};
+  const staffDemandAgg: Num = {};
+  const production: Num = {};
+  const consumption: Num = {};
+  let popCap = 0,
+    taxIncome = 0,
+    taxIncomeBase = 0,
+    coinFromEffects = 0,
+    dpBase = 0,
+    dpMultPct = 0,
+    upkeepCoin = 0,
+    prestige = 0,
+    buildCoin = 0,
+    buildDp = 0,
+    footMin = 0,
+    footMax = 0,
+    foodProduced = 0;
 
-    // Flat effects.
-    for (const e of cat.effects.filter((x) => x.districtTypeId === dt.id)) {
-      const amount = Number((e.params as Record<string, unknown>)?.amount ?? 0);
-      if (e.effectType === "coin_per_day") coinFromEffects += amount;
-      if (e.effectType === "dp_per_day") dpBase += amount;
-    }
-
-    upkeepCoin += dt.upkeepCoinDaily * upkeepScale;
+  for (const d of perDistrict) {
+    popCap += d.popCap;
+    for (const [c, n] of Object.entries(d.popByClass)) add(popByClass, c, n);
+    for (const [c, n] of Object.entries(d.staffDemand)) add(staffDemandAgg, c, n);
+    for (const p of d.production) add(production, p.resourceId, p.amount);
+    for (const c of d.consumption) add(consumption, c.tagId, c.amount);
+    taxIncome += d.taxCoin;
+    taxIncomeBase += d.taxCoinBase;
+    coinFromEffects += d.effectCoin;
+    upkeepCoin += d.upkeepCoin;
+    dpBase += d.dpBase;
+    dpMultPct += d.dpMultPct;
+    prestige += d.prestige;
+    buildCoin += d.buildCoin;
+    buildDp += d.buildDp;
+    footMin += d.footMin;
+    footMax += d.footMax;
+    foodProduced += d.foodProduced;
   }
 
-  // Food: production of food-valued resources vs. what the population eats.
-  let foodProduced = 0;
-  for (const [resId, amt] of Object.entries(production)) {
-    foodProduced += amt * (resById.get(resId)?.foodValue ?? 0);
-  }
-  let foodConsumed = 0;
-  for (const [cls, n] of Object.entries(popByClass)) {
-    foodConsumed += n * occMeta(cls, "food_cost_per_capita");
-  }
+  // Food eaten.
+  let foodConsumedCiv = 0;
+  for (const [cls, n] of Object.entries(popByClass))
+    foodConsumedCiv += n * occMeta(cls, "food_cost_per_capita");
 
   // Garrison.
-  let garrisonCoin = 0;
-  let garrisonFood = 0;
-  let soldiers = 0;
+  let garrisonCoin = 0,
+    garrisonFood = 0,
+    soldiers = 0;
   for (const g of plan.garrison) {
     const u = unitById.get(g.unitTypeId);
     if (!u) continue;
@@ -236,13 +288,23 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
     garrisonFood += u.upkeepFoodDaily * g.count;
     soldiers += g.count;
   }
-  foodConsumed += garrisonFood;
+  const foodConsumed = foodConsumedCiv + garrisonFood;
+
+  // Garrison cap from district effects (barracks etc.).
+  let garrisonCap = 0;
+  for (const inst of plan.districts) {
+    for (const e of cat.effects.filter(
+      (x) => x.districtTypeId === inst.districtTypeId && x.effectType === "garrison_cap_bonus",
+    ))
+      garrisonCap += Number((e.params as Record<string, unknown>)?.amount ?? 0);
+  }
 
   const dpIncome = dpBase * (1 + dpMultPct / 100);
   const coinNet = taxIncome + coinFromEffects - upkeepCoin - garrisonCoin;
   const foodNet = foodProduced - foodConsumed;
+  const grossCoin = taxIncome + coinFromEffects;
 
-  // Composition incl. soldiers (housed civilians + garrison).
+  // Composition (incl. garrison soldiers).
   const compClasses: Num = { ...popByClass };
   if (soldiers > 0) add(compClasses, "soldier", soldiers);
   const compTotal = Object.values(compClasses).reduce((s, v) => s + v, 0);
@@ -254,23 +316,61 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
     }))
     .sort((a, b) => b.count - a.count);
 
-  // Staffing supply = the housed working population of each class.
-  const staffing = Object.keys(staffDemand).map((classId) => ({
+  const target = POPULATION_COMPOSITION_BY_TIER[tier] ?? {};
+  const allClasses = new Set([...Object.keys(target), ...composition.map((c) => c.classId)]);
+  const compositionDeviation = [...allClasses]
+    .map((classId) => {
+      const planPct = composition.find((c) => c.classId === classId)?.pct ?? 0;
+      const targetPct = target[classId] ?? 0;
+      return { classId, planPct, targetPct, delta: planPct - targetPct };
+    })
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+  // Staffing supply = housed working population of each class.
+  const staffing = Object.keys(staffDemandAgg).map((classId) => ({
     classId,
-    demand: staffDemand[classId] ?? 0,
+    demand: staffDemandAgg[classId] ?? 0,
     supply: popByClass[classId] ?? 0,
   }));
+
+  // Supply-chain reconciliation: for each input tag, what the plan produces
+  // that satisfies it vs. what it demands.
+  const inputBalance = Object.entries(consumption)
+    .map(([tagId, demand]) => {
+      const satisfying = Object.entries(production)
+        .filter(([resId]) => tagsByResource.get(resId)?.has(tagId))
+        .map(([resId, amount]) => ({ resourceId: resId, name: resName(resId), amount }));
+      const supply = satisfying.reduce((s, r) => s + r.amount, 0);
+      return { tagId, name: tagName(tagId), demand, supply, net: supply - demand, satisfying };
+    })
+    .sort((a, b) => a.net - b.net);
+
+  // Efficiency ratios.
+  const ratios = {
+    coinPerPop: popCap > 0 ? coinNet / popCap : 0,
+    coinPerDistrict: perDistrict.length > 0 ? coinNet / perDistrict.length : 0,
+    taxPerCapita: popCap > 0 ? taxIncome / popCap : 0,
+    foodSelfSufficiencyPct: foodConsumed > 0 ? (foodProduced / foodConsumed) * 100 : foodProduced > 0 ? 999 : 0,
+    upkeepRatioPct: grossCoin > 0 ? ((upkeepCoin + garrisonCoin) / grossCoin) * 100 : 0,
+    buildRoiDays: coinNet > 0 ? buildCoin / coinNet : null,
+    scaleCoinBonus: taxIncome - taxIncomeBase,
+    scaleCoinBonusPct: taxIncomeBase > 0 ? ((taxIncome - taxIncomeBase) / taxIncomeBase) * 100 : 0,
+  };
 
   // Warnings.
   const warnings: string[] = [];
   if (foodNet < 0) warnings.push(`Food deficit: ${foodNet.toFixed(0)}/day — the settlement starves.`);
   if (coinNet < 0) warnings.push(`Coin deficit: ${coinNet.toFixed(0)}/day — the treasury bleeds.`);
-  for (const s of staffing) {
+  for (const s of staffing)
     if (s.demand > s.supply)
       warnings.push(
         `Understaffed: needs ${s.demand} ${occById.get(s.classId)?.displayName ?? s.classId}, only ${s.supply} housed.`,
       );
-  }
+  for (const b of inputBalance)
+    if (b.net < 0)
+      warnings.push(`Short of ${b.name}: demand ${b.demand}, local supply ${b.supply.toFixed(1)}/day.`);
+  if (soldiers > garrisonCap && soldiers > 0)
+    warnings.push(`Garrison ${soldiers} exceeds cap ${garrisonCap} — build more barracks.`);
   if (popCap === 0 && plan.districts.length > 0)
     warnings.push("No housing yet — add a residential quarter to seat a population.");
 
@@ -278,39 +378,39 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
     popCap,
     popByClass,
     composition,
-    target: POPULATION_COMPOSITION_BY_TIER[tier] ?? {},
+    compositionDeviation,
+    target,
     staffing,
     production: Object.entries(production)
-      .map(([resourceId, amount]) => ({
-        resourceId,
-        name: resById.get(resourceId)?.displayName ?? resourceId,
-        amount,
-      }))
+      .map(([resourceId, amount]) => ({ resourceId, name: resName(resourceId), amount }))
       .sort((a, b) => b.amount - a.amount),
     consumption: Object.entries(consumption)
-      .map(([tagId, amount]) => ({
-        tagId,
-        name: cat.tags.find((t) => t.id === tagId)?.displayName ?? tagId,
-        amount,
-      }))
+      .map(([tagId, amount]) => ({ tagId, name: tagName(tagId), amount }))
       .sort((a, b) => b.amount - a.amount),
+    inputBalance,
     foodProduced,
     foodConsumed,
+    foodConsumedCiv,
     foodNet,
     taxIncome,
     coinFromEffects,
     upkeepCoin,
     garrisonCoin,
     garrisonFood,
+    grossCoin,
     coinNet,
     dpIncome,
+    dpMultPct,
     prestige,
     soldiers,
+    garrisonCap,
     buildCoin,
     buildDp,
     footMin,
     footMax,
     districtCount: plan.districts.length,
+    ratios,
+    perDistrict,
     warnings,
   };
 }

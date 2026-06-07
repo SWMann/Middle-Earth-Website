@@ -1,6 +1,5 @@
 import "server-only";
 import { cache } from "react";
-import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 
 /**
@@ -24,8 +23,14 @@ export const getPlannerCatalogue = cache(async () => {
     scaleBonuses,
     tierOutput,
     requiredBuildings,
+    requiredComponents,
     buildingTypes,
-    bedProvides,
+    provides,
+    functionalComponents,
+    buildingVariants,
+    buildingTags,
+    resourceTags,
+    tierThresholds,
     factionRules,
     unitTypes,
   ] = await Promise.all([
@@ -59,23 +64,25 @@ export const getPlannerCatalogue = cache(async () => {
     db.select().from(schema.districtScaleBonuses),
     db.select().from(schema.districtTierOutput),
     db.select().from(schema.districtRequiredBuildings),
+    db.select().from(schema.districtRequiredComponents),
+    db.select().from(schema.buildingTypes),
+    db.select().from(schema.buildingProvidesComponents),
     db
       .select({
-        id: schema.buildingTypes.id,
-        displayName: schema.buildingTypes.displayName,
-        category: schema.buildingTypes.category,
-        housingClass: schema.buildingTypes.housingClass,
-        tierMin: schema.buildingTypes.tierMin,
+        id: schema.functionalComponents.id,
+        displayName: schema.functionalComponents.displayName,
       })
-      .from(schema.buildingTypes),
-    // Beds each building provides (component_id = 'BED').
+      .from(schema.functionalComponents),
     db
       .select({
-        buildingTypeId: schema.buildingProvidesComponents.buildingTypeId,
-        quantity: schema.buildingProvidesComponents.quantity,
+        buildingTypeId: schema.buildingVariants.buildingTypeId,
+        cultureId: schema.buildingVariants.cultureId,
+        variantName: schema.buildingVariants.variantName,
       })
-      .from(schema.buildingProvidesComponents)
-      .where(eq(schema.buildingProvidesComponents.componentId, "BED")),
+      .from(schema.buildingVariants),
+    db.select().from(schema.buildingTags),
+    db.select().from(schema.resourceTags),
+    db.select().from(schema.tierDecorationThresholds),
     db.select().from(schema.factionDistrictRules),
     db
       .select({
@@ -93,7 +100,9 @@ export const getPlannerCatalogue = cache(async () => {
   ]);
 
   const bedsByBuilding = new Map<string, number>();
-  for (const b of bedProvides) bedsByBuilding.set(b.buildingTypeId, b.quantity);
+  for (const p of provides) {
+    if (p.componentId === "BED") bedsByBuilding.set(p.buildingTypeId, p.quantity);
+  }
 
   return {
     factions,
@@ -109,10 +118,26 @@ export const getPlannerCatalogue = cache(async () => {
     scaleBonuses,
     tierOutput,
     requiredBuildings,
+    requiredComponents,
     buildingTypes: buildingTypes.map((b) => ({
-      ...b,
+      id: b.id,
+      displayName: b.displayName,
+      category: b.category,
+      housingClass: b.housingClass,
+      tierMin: b.tierMin,
+      minFootprintBlocks: b.minFootprintBlocks,
+      maxFootprintBlocks: b.maxFootprintBlocks,
+      minHeightBlocks: b.minHeightBlocks,
+      level: b.level,
+      upgradesFrom: b.upgradesFrom,
       beds: bedsByBuilding.get(b.id) ?? 0,
     })),
+    provides,
+    functionalComponents,
+    buildingVariants,
+    buildingTags,
+    resourceTags,
+    tierThresholds,
     factionRules,
     unitTypes,
   };

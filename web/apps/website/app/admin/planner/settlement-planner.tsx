@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { PlannerCatalogue } from "@/lib/data/planner";
 import {
   type Plan,
   type PlanDistrict,
+  type DistrictContribution,
   TIER_ORDER,
   tierIndex,
   prettyTier,
@@ -21,6 +23,9 @@ const nextUid = () => `d${Date.now().toString(36)}_${(uidCounter++).toString(36)
 export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }) {
   const [plan, setPlan] = useState<Plan>(emptyPlan);
   const [drafts, setDrafts] = useState<{ name: string; plan: Plan }[]>([]);
+  const [modal, setModal] = useState<
+    { type: "district"; uid: string } | { type: "building"; id: string } | null
+  >(null);
 
   // Load drafts from localStorage on mount.
   useEffect(() => {
@@ -289,7 +294,13 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
                   className="rounded border border-stone-200 dark:border-stone-800 p-3"
                 >
                   <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="font-semibold">{dt.displayName}</span>
+                    <button
+                      onClick={() => setModal({ type: "district", uid: inst.uid })}
+                      className="font-semibold hover:underline text-left"
+                      title="Open district detail"
+                    >
+                      {dt.displayName}
+                    </button>
                     <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-900 text-stone-500">
                       {dt.category}
                     </span>
@@ -325,6 +336,7 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
                             sub={`${b.beds} beds · ${b.housingClass}`}
                             value={cur}
                             onChange={(n) => setBuildingCount(inst.uid, b.id, n)}
+                            onLabelClick={() => setModal({ type: "building", id: b.id })}
                           />
                         );
                       })}
@@ -429,22 +441,54 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
 
         {/* ---------- RIGHT: preview ---------- */}
         <div className="lg:sticky lg:top-6 space-y-4">
-          <Preview preview={preview} catalogue={catalogue} />
+          <Preview preview={preview} catalogue={catalogue} onOpen={setModal} />
         </div>
       </div>
+
+      {/* ---------- Modals ---------- */}
+      {modal?.type === "district" &&
+        (() => {
+          const inst = plan.districts.find((d) => d.uid === modal.uid);
+          const contrib = preview.perDistrict.find((d) => d.uid === modal.uid);
+          if (!inst || !contrib) return null;
+          return (
+            <DistrictModal
+              contrib={contrib}
+              catalogue={catalogue}
+              onClose={() => setModal(null)}
+              onBuilding={(id) => setModal({ type: "building", id })}
+            />
+          );
+        })()}
+      {modal?.type === "building" && (
+        <BuildingModal
+          id={modal.id}
+          catalogue={catalogue}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   );
 }
 
+export type OpenModal = (
+  m: { type: "district"; uid: string } | { type: "building"; id: string },
+) => void;
+
 // ---------- Preview panel ----------
+
+const TABS = ["Overview", "Economy", "Population", "Production"] as const;
 
 function Preview({
   preview: p,
   catalogue,
+  onOpen,
 }: {
   preview: ReturnType<typeof computePreview>;
   catalogue: PlannerCatalogue;
+  onOpen: OpenModal;
 }) {
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
   const occName = (id: string) =>
     catalogue.occupationClasses.find((c) => c.id === id)?.displayName ?? id;
   const norm = (n: number) => {
@@ -458,29 +502,15 @@ function Preview({
   };
   const col = (n: number) =>
     n >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400";
+  const COLORS = ["bg-amber-500", "bg-sky-500", "bg-violet-500", "bg-emerald-500", "bg-rose-500", "bg-stone-500"];
 
   return (
     <div className="rounded-lg border border-stone-200 dark:border-stone-800 overflow-hidden">
       <div className="bg-stone-50 dark:bg-stone-900/50 px-4 py-2 text-xs uppercase tracking-widest opacity-60">
         Live preview
       </div>
-      <div className="p-4 space-y-5">
-        {/* Warnings */}
-        {p.warnings.length > 0 && (
-          <ul className="space-y-1">
-            {p.warnings.map((w, i) => (
-              <li
-                key={i}
-                className="text-xs text-red-700 dark:text-red-400 flex gap-1.5"
-              >
-                <span aria-hidden>⚠</span>
-                {w}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* Headline */}
+      <div className="p-4 space-y-4">
+        {/* Headline (always shown) */}
         <div className="grid grid-cols-2 gap-3">
           <Big label="Population cap" value={fmt(p.popCap)} />
           <Big label="Districts" value={p.districtCount.toString()} />
@@ -488,136 +518,252 @@ function Preview({
           <Big label="Food / day" value={signed(p.foodNet)} cls={col(p.foodNet)} />
         </div>
 
-        {/* Population composition */}
-        {p.composition.length > 0 && (
-          <Block title="Population by class">
-            <div className="flex h-2.5 w-full overflow-hidden rounded mb-2">
-              {p.composition.map((c, i) => (
-                <div
-                  key={c.classId}
-                  className={
-                    [
-                      "bg-amber-500",
-                      "bg-sky-500",
-                      "bg-violet-500",
-                      "bg-emerald-500",
-                      "bg-rose-500",
-                      "bg-stone-500",
-                    ][i % 6]
-                  }
-                  style={{ width: `${c.pct}%` }}
-                  title={`${occName(c.classId)} ${c.pct}%`}
+        {/* Warnings (always shown) */}
+        {p.warnings.length > 0 && (
+          <ul className="space-y-1">
+            {p.warnings.map((w, i) => (
+              <li key={i} className="text-xs text-red-700 dark:text-red-400 flex gap-1.5">
+                <span aria-hidden>⚠</span>
+                {w}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Tabs */}
+        <div className="flex gap-1 border-b border-stone-200 dark:border-stone-800">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`text-xs px-2.5 py-1.5 -mb-px border-b-2 ${
+                tab === t
+                  ? "border-stone-900 dark:border-stone-100 font-medium"
+                  : "border-transparent opacity-60 hover:opacity-100"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* ---- Overview ---- */}
+        {tab === "Overview" && (
+          <div className="space-y-4">
+            {p.composition.length > 0 && (
+              <Block title="Population by class">
+                <div className="flex h-2.5 w-full overflow-hidden rounded mb-2">
+                  {p.composition.map((c, i) => (
+                    <div
+                      key={c.classId}
+                      className={COLORS[i % 6]}
+                      style={{ width: `${c.pct}%` }}
+                      title={`${occName(c.classId)} ${c.pct}%`}
+                    />
+                  ))}
+                </div>
+                <ul className="space-y-0.5 text-sm">
+                  {p.composition.map((c) => (
+                    <li key={c.classId} className="flex items-baseline gap-2">
+                      <span>{occName(c.classId)}</span>
+                      <span className="ml-auto tabular-nums opacity-70">{fmt(c.count)}</span>
+                      <span className="w-10 text-right tabular-nums opacity-50">{c.pct}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </Block>
+            )}
+            <Block title="Treasury / day">
+              <Row label="Tax from residents" value={signed(p.taxIncome)} cls={col(p.taxIncome)} />
+              {p.coinFromEffects > 0 && (
+                <Row label="Trade & services" value={signed(p.coinFromEffects)} cls={col(p.coinFromEffects)} />
+              )}
+              <Row label="District upkeep" value={signed(-p.upkeepCoin)} cls={col(-p.upkeepCoin)} />
+              {p.garrisonCoin > 0 && (
+                <Row label="Garrison upkeep" value={signed(-p.garrisonCoin)} cls={col(-p.garrisonCoin)} />
+              )}
+              <Row label="Net coin" value={signed(p.coinNet)} cls={col(p.coinNet)} strong />
+              <div className="h-2" />
+              <Row label="Net food" value={signed(p.foodNet)} cls={col(p.foodNet)} strong />
+              {p.dpIncome > 0 && <Row label="Diplomacy / day" value={signed(p.dpIncome)} cls={col(p.dpIncome)} />}
+              {p.prestige > 0 && <Row label="Prestige" value={`+${fmt(p.prestige)}`} />}
+            </Block>
+            <Block title="To build">
+              <Row label="Coin commission" value={fmt(p.buildCoin)} />
+              {p.buildDp > 0 && <Row label="DP commission" value={fmt(p.buildDp)} />}
+              <Row label="Footprint" value={`${fmt(p.footMin)}–${fmt(p.footMax)} blk²`} />
+            </Block>
+          </div>
+        )}
+
+        {/* ---- Economy ---- */}
+        {tab === "Economy" && (
+          <div className="space-y-4">
+            <Block title="Coin by district">
+              {p.perDistrict.length === 0 ? (
+                <p className="text-xs opacity-50 italic">No districts yet.</p>
+              ) : (
+                <ul className="space-y-0.5 text-sm">
+                  {[...p.perDistrict]
+                    .sort((a, b) => b.coinNet - a.coinNet)
+                    .map((d) => (
+                      <li key={d.uid} className="flex items-baseline gap-2">
+                        <button
+                          onClick={() => onOpen({ type: "district", uid: d.uid })}
+                          className="hover:underline text-left truncate"
+                        >
+                          {d.name}
+                        </button>
+                        <span className={`ml-auto tabular-nums ${col(d.coinNet)}`}>
+                          {signed(d.coinNet)}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </Block>
+            <Block title="Efficiency">
+              <Row label="Coin / head" value={p.ratios.coinPerPop.toFixed(2)} />
+              <Row label="Coin / district" value={p.ratios.coinPerDistrict.toFixed(1)} />
+              <Row label="Tax / head" value={p.ratios.taxPerCapita.toFixed(2)} />
+              <Row
+                label="Food self-sufficiency"
+                value={`${Math.round(p.ratios.foodSelfSufficiencyPct)}%`}
+                cls={p.ratios.foodSelfSufficiencyPct >= 100 ? col(1) : col(-1)}
+              />
+              <Row
+                label="Upkeep / gross income"
+                value={`${Math.round(p.ratios.upkeepRatioPct)}%`}
+              />
+              {p.ratios.buildRoiDays != null && (
+                <Row label="Build payback" value={`${Math.ceil(p.ratios.buildRoiDays)} days`} />
+              )}
+            </Block>
+            {p.ratios.scaleCoinBonus > 0 && (
+              <Block title="Density dividend">
+                <Row
+                  label="Extra tax from building big"
+                  value={signed(p.ratios.scaleCoinBonus)}
+                  cls={col(1)}
                 />
-              ))}
-            </div>
-            <ul className="space-y-0.5 text-sm">
-              {p.composition.map((c) => (
-                <li key={c.classId} className="flex items-baseline gap-2">
-                  <span>{occName(c.classId)}</span>
-                  <span className="ml-auto tabular-nums opacity-70">
-                    {fmt(c.count)}
-                  </span>
-                  <span className="w-10 text-right tabular-nums opacity-50">
-                    {c.pct}%
-                  </span>
-                  {p.target[c.classId] != null && (
-                    <span className="w-14 text-right text-xs opacity-40">
-                      ~{p.target[c.classId]}%
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <p className="text-[10px] opacity-40 mt-1">
-              Right column: the canonical mix for this tier, for reference.
-            </p>
-          </Block>
+                <p className="text-[10px] opacity-40 mt-1">
+                  +{Math.round(p.ratios.scaleCoinBonusPct)}% over the same housing built at
+                  the minimum size.
+                </p>
+              </Block>
+            )}
+          </div>
         )}
 
-        {/* Economy */}
-        <Block title="Treasury / day">
-          <Row label="Tax from residents" value={signed(p.taxIncome)} cls={col(p.taxIncome)} />
-          {p.coinFromEffects > 0 && (
-            <Row label="Trade & services" value={signed(p.coinFromEffects)} cls={col(p.coinFromEffects)} />
-          )}
-          <Row label="District upkeep" value={signed(-p.upkeepCoin)} cls={col(-p.upkeepCoin)} />
-          {p.garrisonCoin > 0 && (
-            <Row label="Garrison upkeep" value={signed(-p.garrisonCoin)} cls={col(-p.garrisonCoin)} />
-          )}
-          <Row label="Net coin" value={signed(p.coinNet)} cls={col(p.coinNet)} strong />
-          <div className="h-2" />
-          <Row label="Food produced" value={signed(p.foodProduced)} cls={col(p.foodProduced)} />
-          <Row label="Food eaten" value={signed(-p.foodConsumed)} cls={col(-p.foodConsumed)} />
-          <Row label="Net food" value={signed(p.foodNet)} cls={col(p.foodNet)} strong />
-          <div className="h-2" />
-          {p.dpIncome > 0 && <Row label="Diplomacy / day" value={signed(p.dpIncome)} cls={col(p.dpIncome)} />}
-          {p.prestige > 0 && <Row label="Prestige" value={`+${fmt(p.prestige)}`} />}
-        </Block>
-
-        {/* Production */}
-        {p.production.length > 0 && (
-          <Block title="Production / day">
-            <ul className="space-y-0.5 text-sm">
-              {p.production.map((r) => (
-                <li key={r.resourceId} className="flex items-baseline gap-2">
-                  <span>{r.name}</span>
-                  <span className="ml-auto tabular-nums text-emerald-700 dark:text-emerald-400">
-                    +{r.amount.toFixed(1)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Block>
+        {/* ---- Population ---- */}
+        {tab === "Population" && (
+          <div className="space-y-4">
+            <Block title="Composition vs. tier norm">
+              <ul className="space-y-0.5 text-sm">
+                {p.compositionDeviation
+                  .filter((d) => d.planPct > 0 || d.targetPct > 0)
+                  .map((d) => (
+                    <li key={d.classId} className="flex items-baseline gap-2">
+                      <span>{occName(d.classId)}</span>
+                      <span className="ml-auto tabular-nums opacity-70 w-10 text-right">
+                        {d.planPct}%
+                      </span>
+                      <span className="tabular-nums opacity-40 w-12 text-right">
+                        ~{d.targetPct}%
+                      </span>
+                      <span
+                        className={`tabular-nums w-12 text-right ${
+                          Math.abs(d.delta) <= 5 ? "opacity-40" : col(d.delta)
+                        }`}
+                      >
+                        {d.delta >= 0 ? "+" : ""}
+                        {d.delta}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+              <p className="text-[10px] opacity-40 mt-1">plan · norm · deviation</p>
+            </Block>
+            {p.staffing.length > 0 && (
+              <Block title="Workforce (needed / housed)">
+                <ul className="space-y-0.5 text-sm">
+                  {p.staffing.map((s) => (
+                    <li key={s.classId} className="flex items-baseline gap-2">
+                      <span>{occName(s.classId)}</span>
+                      <span
+                        className={`ml-auto tabular-nums ${
+                          s.demand > s.supply ? col(-1) : col(1)
+                        }`}
+                      >
+                        {s.demand} / {s.supply}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Block>
+            )}
+            {p.soldiers > 0 && (
+              <Block title="Garrison">
+                <Row label="Soldiers" value={fmt(p.soldiers)} />
+                <Row
+                  label="Garrison cap"
+                  value={fmt(p.garrisonCap)}
+                  cls={p.soldiers > p.garrisonCap ? col(-1) : undefined}
+                />
+                <Row label="Upkeep" value={`${fmt(p.garrisonFood)} food + ${fmt(p.garrisonCoin)} coin`} />
+              </Block>
+            )}
+          </div>
         )}
 
-        {/* Consumption */}
-        {p.consumption.length > 0 && (
-          <Block title="Input demand / day">
-            <ul className="space-y-0.5 text-sm">
-              {p.consumption.map((c) => (
-                <li key={c.tagId} className="flex items-baseline gap-2">
-                  <span>{c.name}</span>
-                  <span className="ml-auto tabular-nums opacity-70">
-                    {c.amount.toFixed(1)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Block>
+        {/* ---- Production ---- */}
+        {tab === "Production" && (
+          <div className="space-y-4">
+            {p.inputBalance.length > 0 && (
+              <Block title="Supply chain">
+                <ul className="space-y-1 text-sm">
+                  {p.inputBalance.map((b) => (
+                    <li key={b.tagId}>
+                      <div className="flex items-baseline gap-2">
+                        <span>{b.name}</span>
+                        <span className={`ml-auto tabular-nums ${col(b.net)}`}>
+                          {b.net >= 0 ? "surplus" : "short"} {Math.abs(b.net).toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="text-[10px] opacity-50">
+                        demand {b.demand} · local supply {b.supply.toFixed(1)}
+                        {b.satisfying.length > 0 &&
+                          ` (${b.satisfying.map((s) => s.name).join(", ")})`}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Block>
+            )}
+            {p.production.length > 0 && (
+              <Block title="Production / day">
+                <ul className="space-y-0.5 text-sm">
+                  {p.production.map((r) => (
+                    <li key={r.resourceId} className="flex items-baseline gap-2">
+                      <span>{r.name}</span>
+                      <span className="ml-auto tabular-nums text-emerald-700 dark:text-emerald-400">
+                        +{r.amount.toFixed(1)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Block>
+            )}
+            <Block title="Food balance">
+              <Row label="Produced" value={signed(p.foodProduced)} cls={col(p.foodProduced)} />
+              <Row label="Civilians eat" value={signed(-p.foodConsumedCiv)} cls={col(-1)} />
+              {p.garrisonFood > 0 && (
+                <Row label="Garrison eats" value={signed(-p.garrisonFood)} cls={col(-1)} />
+              )}
+              <Row label="Net" value={signed(p.foodNet)} cls={col(p.foodNet)} strong />
+            </Block>
+          </div>
         )}
-
-        {/* Staffing */}
-        {p.staffing.length > 0 && (
-          <Block title="Staffing">
-            <ul className="space-y-0.5 text-sm">
-              {p.staffing.map((s) => (
-                <li key={s.classId} className="flex items-baseline gap-2">
-                  <span>{occName(s.classId)}</span>
-                  <span
-                    className={`ml-auto tabular-nums ${
-                      s.demand > s.supply
-                        ? "text-red-700 dark:text-red-400"
-                        : "text-emerald-700 dark:text-emerald-400"
-                    }`}
-                  >
-                    {s.demand} / {s.supply}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="text-[10px] opacity-40 mt-1">needed / housed</p>
-          </Block>
-        )}
-
-        {/* Construction */}
-        <Block title="To build">
-          <Row label="Coin commission" value={fmt(p.buildCoin)} />
-          {p.buildDp > 0 && <Row label="DP commission" value={fmt(p.buildDp)} />}
-          <Row
-            label="Footprint"
-            value={`${fmt(p.footMin)}–${fmt(p.footMax)} blk²`}
-          />
-        </Block>
       </div>
     </div>
   );
@@ -674,6 +820,7 @@ function Stepper({
   sub,
   value,
   onChange,
+  onLabelClick,
   min = 0,
   max = 99,
 }: {
@@ -681,13 +828,20 @@ function Stepper({
   sub?: string;
   value: number;
   onChange: (n: number) => void;
+  onLabelClick?: () => void;
   min?: number;
   max?: number;
 }) {
   return (
     <div className="flex items-center gap-2 text-sm">
       <span className="flex-1 truncate">
-        {label}
+        {onLabelClick ? (
+          <button onClick={onLabelClick} className="hover:underline" title="Open detail">
+            {label}
+          </button>
+        ) : (
+          label
+        )}
         {sub && <span className="opacity-40 text-xs"> · {sub}</span>}
       </span>
       <button
@@ -745,5 +899,279 @@ function Row({
       <span className={strong ? "" : "opacity-70"}>{label}</span>
       <span className={`ml-auto tabular-nums ${cls ?? ""}`}>{value}</span>
     </div>
+  );
+}
+
+// ---------- Modals ----------
+
+function Modal({
+  title,
+  sub,
+  href,
+  hrefLabel,
+  onClose,
+  children,
+}: {
+  title: string;
+  sub?: string;
+  href?: string;
+  hrefLabel?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="mt-12 w-full max-w-lg rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 border-b border-stone-200 dark:border-stone-800 px-5 py-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold truncate">{title}</h2>
+            {sub && <p className="text-xs opacity-60">{sub}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-auto text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 text-xl leading-none"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">{children}</div>
+        {href && (
+          <div className="border-t border-stone-200 dark:border-stone-800 px-5 py-2.5">
+            <Link
+              href={{ pathname: href }}
+              className="text-xs underline opacity-70 hover:opacity-100"
+            >
+              {hrefLabel ?? "Open full page"} →
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DistrictModal({
+  contrib: d,
+  catalogue,
+  onClose,
+  onBuilding,
+}: {
+  contrib: DistrictContribution;
+  catalogue: PlannerCatalogue;
+  onClose: () => void;
+  onBuilding: (id: string) => void;
+}) {
+  const dt = catalogue.districtTypes.find((x) => x.id === d.districtTypeId);
+  const occName = (id: string) =>
+    catalogue.occupationClasses.find((c) => c.id === id)?.displayName ?? id;
+  const bName = (id: string) =>
+    catalogue.buildingTypes.find((b) => b.id === id)?.displayName ?? id;
+  const compName = (id: string) =>
+    catalogue.functionalComponents.find((c) => c.id === id)?.displayName ?? id;
+  const reqB = catalogue.requiredBuildings.filter((r) => r.districtTypeId === d.districtTypeId);
+  const reqC = catalogue.requiredComponents.filter((r) => r.districtTypeId === d.districtTypeId);
+  const fmt = (n: number) => Math.round(n).toLocaleString();
+
+  return (
+    <Modal
+      title={d.name}
+      sub={`${d.category}${dt?.tierMin ? ` · ${prettyTier(dt.tierMin)}+` : ""}${
+        dt?.populationClass ? ` · houses ${occName(dt.populationClass)}` : ""
+      }`}
+      href={`/districts/${d.districtTypeId}`}
+      hrefLabel="Open district page"
+      onClose={onClose}
+    >
+      {dt?.description && <p className="text-sm opacity-80">{dt.description}</p>}
+
+      <Block title="In this plan">
+        <Row label="Buildings" value={`${d.totalBuildings}${d.slotMin != null ? ` (${d.slotMin}–${d.slotMax})` : ""}`} />
+        {d.popCap > 0 && <Row label="Population cap" value={fmt(d.popCap)} />}
+        {Object.entries(d.popByClass).map(([c, n]) => (
+          <Row key={c} label={`· ${occName(c)}`} value={fmt(n)} />
+        ))}
+        <Row label="Net coin / day" value={`${d.coinNet >= 0 ? "+" : ""}${fmt(d.coinNet)}`} />
+        {d.foodProduced > 0 && <Row label="Food / day" value={`+${fmt(d.foodProduced)}`} />}
+        {d.dpBase > 0 && <Row label="Diplomacy / day" value={`+${fmt(d.dpBase)}`} />}
+        {d.prestige > 0 && <Row label="Prestige" value={`+${fmt(d.prestige)}`} />}
+      </Block>
+
+      {d.production.length > 0 && (
+        <Block title="Produces / day">
+          {d.production.map((r) => (
+            <Row key={r.resourceId} label={r.name} value={`+${r.amount.toFixed(1)}`} />
+          ))}
+        </Block>
+      )}
+      {d.consumption.length > 0 && (
+        <Block title="Consumes / day">
+          {d.consumption.map((c) => (
+            <Row key={c.tagId} label={c.name} value={c.amount.toFixed(1)} />
+          ))}
+        </Block>
+      )}
+      {d.scale.length > 0 && (
+        <Block title="Scale dividend (active)">
+          {d.scale.map((s) => (
+            <Row
+              key={s.bonusType}
+              label={s.bonusType.replace(/_/g, " ")}
+              value={`+${s.totalPct}${s.bonusType === "prestige" ? "" : "%"}`}
+            />
+          ))}
+        </Block>
+      )}
+
+      {reqB.length > 0 && (
+        <Block title="Required buildings">
+          <ul className="text-sm space-y-0.5">
+            {reqB.map((r) => (
+              <li key={r.id} className="flex items-baseline gap-2">
+                <span className="tabular-nums opacity-60 w-12">
+                  {r.maxCount && r.maxCount > r.count ? `${r.count}–${r.maxCount}` : r.count}×
+                </span>
+                {r.buildingTypeId ? (
+                  <button
+                    onClick={() => onBuilding(r.buildingTypeId!)}
+                    className="hover:underline text-left"
+                  >
+                    {bName(r.buildingTypeId)}
+                  </button>
+                ) : (
+                  <span className="italic opacity-80">{r.themeNote ?? "themed"}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+      {reqC.length > 0 && (
+        <Block title="Required components">
+          <ul className="text-sm flex flex-wrap gap-x-3 gap-y-0.5">
+            {reqC.map((r) => (
+              <li key={r.componentId}>
+                {r.count}× {compName(r.componentId)}
+                {r.perCap ? " /cap" : ""}
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+      {Object.keys(d.staffDemand).length > 0 && (
+        <Block title="Staffing">
+          {Object.entries(d.staffDemand).map(([c, n]) => (
+            <Row key={c} label={occName(c)} value={fmt(n)} />
+          ))}
+        </Block>
+      )}
+    </Modal>
+  );
+}
+
+function BuildingModal({
+  id,
+  catalogue,
+  onClose,
+}: {
+  id: string;
+  catalogue: PlannerCatalogue;
+  onClose: () => void;
+}) {
+  const b = catalogue.buildingTypes.find((x) => x.id === id);
+  if (!b) return null;
+  const compName = (cid: string) =>
+    catalogue.functionalComponents.find((c) => c.id === cid)?.displayName ?? cid;
+  const cultureName = (cid: string) =>
+    catalogue.cultures.find((c) => c.id === cid)?.displayName ?? cid;
+  const provides = catalogue.provides.filter((p) => p.buildingTypeId === id);
+  const tags = catalogue.buildingTags.filter((t) => t.buildingTypeId === id).map((t) => t.tag);
+  const variants = catalogue.buildingVariants.filter((v) => v.buildingTypeId === id);
+  const usedBy = catalogue.requiredBuildings
+    .filter((r) => r.buildingTypeId === id)
+    .map((r) => catalogue.districtTypes.find((d) => d.id === r.districtTypeId)?.displayName)
+    .filter(Boolean);
+  const fp =
+    b.minFootprintBlocks != null || b.maxFootprintBlocks != null
+      ? `${b.minFootprintBlocks ?? "?"}–${b.maxFootprintBlocks ?? "?"} blk²`
+      : null;
+
+  return (
+    <Modal
+      title={b.displayName}
+      sub={`${b.category}${b.housingClass ? ` · ${b.housingClass} class` : ""}${
+        b.tierMin ? ` · ${prettyTier(b.tierMin)}+` : ""
+      }`}
+      href={`/buildings`}
+      hrefLabel="Open buildings page"
+      onClose={onClose}
+    >
+      {provides.length > 0 && (
+        <Block title="Provides">
+          <div className="flex flex-wrap gap-1.5">
+            {provides.map((p) => (
+              <span
+                key={p.componentId}
+                className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300"
+              >
+                {p.quantity > 1 ? `${p.quantity}× ` : ""}
+                {compName(p.componentId)}
+              </span>
+            ))}
+          </div>
+        </Block>
+      )}
+      <Block title="Intrinsics">
+        {b.beds > 0 && <Row label="Beds" value={b.beds.toString()} />}
+        {fp && <Row label="Footprint" value={fp} />}
+        {b.minHeightBlocks != null && <Row label="Min height" value={`${b.minHeightBlocks} blk`} />}
+        {b.level > 1 && <Row label="Tier" value={`${b.level}${b.upgradesFrom ? ` (upgrades ${b.upgradesFrom})` : ""}`} />}
+      </Block>
+      {tags.length > 0 && (
+        <Block title="Tags">
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((t) => (
+              <span
+                key={t}
+                className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-900 text-stone-500 font-mono"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        </Block>
+      )}
+      {variants.length > 0 && (
+        <Block title="Cultural variants">
+          <ul className="text-sm space-y-0.5">
+            {variants.map((v) => (
+              <li key={v.cultureId} className="flex items-baseline gap-2">
+                <span className="font-medium">{v.variantName}</span>
+                <span className="ml-auto text-xs opacity-50">{cultureName(v.cultureId)}</span>
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+      {usedBy.length > 0 && (
+        <Block title="Required by">
+          <p className="text-sm opacity-70">{usedBy.join(", ")}</p>
+        </Block>
+      )}
+    </Modal>
   );
 }
