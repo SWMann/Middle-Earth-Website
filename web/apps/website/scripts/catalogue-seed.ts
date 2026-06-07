@@ -30,6 +30,8 @@ export const tagsCatalogue = [
   { id: "T:GlassRaw", displayName: "Glass Sand", description: "Silica sand, input to a glassworks." },
   { id: "T:Goods", displayName: "Finished Goods", description: "Wrought wares — glass, pottery, and the like." },
   { id: "T:Luxury", displayName: "Luxury", description: "High-value finished goods for the wealthy." },
+  { id: "T:Precious", displayName: "Precious", description: "Gold, gems, and precious materials for the goldsmith and the mint." },
+  { id: "T:Seasoning", displayName: "Seasoning", description: "Salt and preservatives." },
 ];
 
 // --- Resources -----------------------------------------------------------
@@ -60,6 +62,11 @@ export const resourcesCatalogue = [
   { id: "R:Sand", displayName: "Glass Sand", description: "Fine silica, washed and graded for the furnace.", foodValue: 0 },
   { id: "R:Glass", displayName: "Glass", description: "Blown and cast panes and vessels. A mark of a wealthy town.", foodValue: 0 },
   { id: "R:Jewellery", displayName: "Jewellery", description: "Wrought precious metal and set stones. Worn by the great.", foodValue: 0 },
+  // --- Deposits / extraction ---
+  { id: "R:Gold", displayName: "Gold", description: "Soft, bright, and incorruptible. Coin, crown, and the goldsmith's stock.", foodValue: 0 },
+  { id: "R:Gems", displayName: "Gems", description: "Cut stones from the deep workings. Tiny, and worth a king's ransom.", foodValue: 0 },
+  { id: "R:Salt", displayName: "Salt", description: "White gold of the table. Preserves the catch and the winter store; trades far.", foodValue: 0 },
+  { id: "R:Marble", displayName: "Marble", description: "Veined, polished fine-stone. The cladding of palaces and tombs.", foodValue: 0 },
 ];
 
 // --- Resource → Tag weights ----------------------------------------------
@@ -99,6 +106,52 @@ export const resourceTagMappings = [
   { resourceId: "R:Sand", tagId: "T:GlassRaw", weight: 2 },
   { resourceId: "R:Glass", tagId: "T:Goods", weight: 3 },
   { resourceId: "R:Jewellery", tagId: "T:Luxury", weight: 3 },
+  // --- Deposits ---
+  { resourceId: "R:Gold", tagId: "T:Precious", weight: 2 },
+  { resourceId: "R:Gold", tagId: "T:Metal", weight: 2 },
+  { resourceId: "R:Gems", tagId: "T:Precious", weight: 3 },
+  { resourceId: "R:Gems", tagId: "T:Luxury", weight: 2 },
+  { resourceId: "R:Salt", tagId: "T:Seasoning", weight: 2 },
+  { resourceId: "R:Salt", tagId: "T:Food", weight: 1 },
+  { resourceId: "R:Marble", tagId: "T:Building", weight: 2 },
+  { resourceId: "R:Marble", tagId: "T:Luxury", weight: 2 },
+];
+
+// --- Deposits (what extraction archetype districts can work) --------------
+// method ties a deposit to an archetype: a Mine works 'mine' deposits, a
+// Quarry works 'quarry', a Forestry Camp works 'forestry'. The player picks
+// the deposit per district; output = baseYield × extraction buildings × tier.
+
+export type DepositSeed = {
+  id: string;
+  displayName: string;
+  resourceId: string;
+  method: string;
+  baseYield: number;
+  tierMin?: string;
+  biome?: string;
+  terrain?: string;
+  requiresDiscovery?: string;
+  rarity?: string;
+  note?: string;
+};
+
+export const depositsCatalogue: DepositSeed[] = [
+  // Mine — ores and precious stuff, worked from shafts.
+  { id: "iron", displayName: "Iron", resourceId: "R:Iron_Ore", method: "mine", baseYield: 2, tierMin: "burgh", biome: "mountain", rarity: "common", note: "The backbone of arms and tools." },
+  { id: "coal", displayName: "Coal", resourceId: "R:Coal", method: "mine", baseYield: 3, tierMin: "burgh", biome: "mountain", rarity: "common", note: "The best smelting fuel — and the only source of it." },
+  { id: "salt", displayName: "Rock Salt", resourceId: "R:Salt", method: "mine", baseYield: 2, tierMin: "village", biome: "mountain", rarity: "common", note: "Hewn from old sea-beds; preserves and trades well." },
+  { id: "gold", displayName: "Gold", resourceId: "R:Gold", method: "mine", baseYield: 1, tierMin: "city", biome: "mountain", rarity: "uncommon", note: "Soft, bright, and coveted." },
+  { id: "gems", displayName: "Gems", resourceId: "R:Gems", method: "mine", baseYield: 1, tierMin: "city", biome: "mountain", requiresDiscovery: "gems", rarity: "rare", note: "Only where a Prospector has struck a gem-bearing seam." },
+  { id: "mithril", displayName: "Mithril", resourceId: "R:Mithril_Ore", method: "mine", baseYield: 1, tierMin: "city", biome: "mountain", requiresDiscovery: "mithril", rarity: "rare", note: "True-silver. Perilous to win, beyond price." },
+  // Quarry — stone and earths, worked from open faces.
+  { id: "stone", displayName: "Stone", resourceId: "R:Stone", method: "quarry", baseYield: 3, tierMin: "burgh", biome: "mountain", rarity: "common", note: "Quarried block, the foundation of everything." },
+  { id: "marble", displayName: "Marble", resourceId: "R:Marble", method: "quarry", baseYield: 1, tierMin: "town", biome: "mountain", rarity: "uncommon", note: "Fine veined stone for palaces." },
+  { id: "clay", displayName: "Clay", resourceId: "R:Clay", method: "quarry", baseYield: 4, tierMin: "village", terrain: "river", rarity: "common", note: "Dug from river banks for the kiln." },
+  { id: "sand", displayName: "Glass Sand", resourceId: "R:Sand", method: "quarry", baseYield: 4, tierMin: "burgh", terrain: "coastal", rarity: "common", note: "Washed silica for the glassworks." },
+  // Forestry — timber, worked from felling-stands.
+  { id: "wood", displayName: "Timber", resourceId: "R:Wood", method: "forestry", baseYield: 3, tierMin: "village", biome: "forest", rarity: "common", note: "Felled and hauled from wooded land." },
+  { id: "mallorn", displayName: "Mallorn", resourceId: "R:Mallorn", method: "forestry", baseYield: 1, tierMin: "town", biome: "forest", rarity: "rare", note: "Silver-barked, gold-leafed. Only the Galadhrim know the way of it." },
 ];
 
 // --- District types -------------------------------------------------------
@@ -135,6 +188,8 @@ export type DistrictSeed = {
   populationClass?: string;
   /** Industrial districts: output = sum of production buildings' outputs. */
   outputFromBuildings?: boolean;
+  /** Extraction archetype: 'mine' | 'quarry' | 'forestry' (deposit-working). */
+  extractionMethod?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -230,32 +285,30 @@ export const districtTypesCatalogue: DistrictSeed[] = [
     description: "Fields of grain worked by farm hands. Foundation of any larger settlement's food supply. Needs open plains.",
   },
 
-  // ----- Extraction -----
+  // ----- Extraction (deposit-working archetypes) -------------------------
+  // A few generic districts work any deposit of their method (see
+  // depositsCatalogue). The player picks the deposit per district; the tile
+  // it needs (biome/terrain/discovery) comes from the chosen deposit, and
+  // output = the deposit's yield × the shafts/faces/stands raised inside.
   {
-    id: "logging_camp", displayName: "Logging Camp", category: "extraction", tierMin: "village",
-    popCost: 2, requiredBiomes: ["forest", "plain"], buildCoinCost: 25, buildTimeDays: 1,
-    description: "Felled timber from wooded land. Output depends sharply on how thickly the tile is forested.",
+    id: "mine", displayName: "Mine", category: "extraction", tierMin: "burgh", extractionMethod: "mine",
+    popCost: 3, buildCoinCost: 80, buildTimeDays: 3,
+    description: "Adits and shafts after ore, coal, salt, and the bright metals. Pick the seam; sink as many shafts as the workings will bear.",
   },
   {
-    id: "stone_quarry", displayName: "Stone Quarry", category: "extraction", tierMin: "burgh",
-    popCost: 3, requiredBiomes: ["mountain"], buildCoinCost: 60, buildTimeDays: 3,
-    description: "Open-face cut stone. Heavy work; needs rocky or mountain ground.",
+    id: "deep_mine", displayName: "Deep Mine", category: "extraction", tierMin: "city", extractionMethod: "mine",
+    popCost: 5, buildCoinCost: 250, buildTimeDays: 6, upkeepCoinDaily: 3,
+    description: "A great delving with winding-engines and drainage — the only way to win gold, gems, and mithril from the deep rock. Many shafts, and perilous.",
   },
   {
-    id: "iron_mine", displayName: "Iron Mine", category: "extraction", tierMin: "burgh",
-    popCost: 3, requiredBiomes: ["mountain"], buildCoinCost: 80, buildTimeDays: 3,
-    description: "Pit and shaft mining for iron ore. Consumes fuel to keep tools and lamps running.",
+    id: "quarry", displayName: "Quarry", category: "extraction", tierMin: "burgh", extractionMethod: "quarry",
+    popCost: 2, buildCoinCost: 50, buildTimeDays: 2,
+    description: "Open faces cut for stone, marble, clay, or glass-sand. Pick the bed; open as many faces as the ground allows.",
   },
   {
-    id: "mithril_mine", displayName: "Mithril Mine", category: "extraction", tierMin: "city",
-    popCost: 4, requiredBiomes: ["mountain"], requiresDiscovery: "mithril",
-    buildCoinCost: 500, buildTimeDays: 7, upkeepCoinDaily: 5,
-    description: "Deep-shaft working for true-silver. Only buildable where a Prospector has confirmed a mithril vein — and even then, the digging is perilous and slow.",
-  },
-  {
-    id: "mallorn_grove", displayName: "Mallorn Grove", category: "extraction", tierMin: "town",
-    popCost: 2, requiredBiomes: ["forest"], buildCoinCost: 100, buildTimeDays: 5,
-    description: "A tended stand of mallorn. Harvested with reverence, never clear-cut. Only the Galadhrim know the way of it.",
+    id: "forestry_camp", displayName: "Forestry Camp", category: "extraction", tierMin: "village", extractionMethod: "forestry",
+    popCost: 2, buildCoinCost: 25, buildTimeDays: 1,
+    description: "Felling-stands and hauling-ways in the woods, after common timber or the rare mallorn. Output rides on how thickly the tile is wooded.",
   },
 
   // Raised herds (Wool + Hide for the textile and leather chains).
@@ -263,17 +316,6 @@ export const districtTypesCatalogue: DistrictSeed[] = [
     id: "pasture", displayName: "Pasture", category: "agricultural", tierMin: "village",
     popCost: 2, requiredBiomes: ["plain"], buildCoinCost: 25, buildTimeDays: 1,
     description: "Grazed flocks and herds — shorn for wool and slaughtered for hide. Needs open grassland.",
-  },
-  // Earths for the kiln and the glassworks.
-  {
-    id: "clay_pit", displayName: "Clay Pit", category: "extraction", tierMin: "village",
-    popCost: 2, terrainRequirement: "river", buildCoinCost: 20, buildTimeDays: 1,
-    description: "Dug and puddled river-clay, raw for the brick-kiln and the potter.",
-  },
-  {
-    id: "sand_pit", displayName: "Sand Pit", category: "extraction", tierMin: "burgh",
-    popCost: 2, terrainRequirement: "coastal", buildCoinCost: 30, buildTimeDays: 1,
-    description: "Washed silica sand from the strand, graded for the glass-furnace.",
   },
 
   // ----- Industrial (output scales with the production buildings inside) ---
@@ -467,13 +509,13 @@ export const districtTypesCatalogue: DistrictSeed[] = [
 // --- District staffing (by occupation class) -----------------------------
 
 export const districtStaffingCatalogue = [
+  // Extraction archetypes (miners, quarriers, woodsmen — peasant labour).
+  { districtTypeId: "mine", classId: "peasant", count: 3 },
+  { districtTypeId: "deep_mine", classId: "peasant", count: 4 },
+  { districtTypeId: "deep_mine", classId: "artisan", count: 1 },
+  { districtTypeId: "quarry", classId: "peasant", count: 3 },
+  { districtTypeId: "forestry_camp", classId: "peasant", count: 2 },
   { districtTypeId: "wheat_farm", classId: "peasant", count: 4 },
-  { districtTypeId: "logging_camp", classId: "peasant", count: 2 },
-  { districtTypeId: "stone_quarry", classId: "peasant", count: 3 },
-  { districtTypeId: "iron_mine", classId: "peasant", count: 3 },
-  { districtTypeId: "mithril_mine", classId: "peasant", count: 4 },
-  { districtTypeId: "mallorn_grove", classId: "scholar", count: 1 },
-  { districtTypeId: "mallorn_grove", classId: "peasant", count: 1 },
   { districtTypeId: "bakery", classId: "artisan", count: 1 },
   { districtTypeId: "bakery", classId: "peasant", count: 1 },
   { districtTypeId: "charcoal_burner", classId: "peasant", count: 1 },
@@ -528,28 +570,21 @@ export const districtEffectsCatalogue = [
 // Same district, different yield (or different resource) by tile biome.
 
 export const districtBiomeOutputsCatalogue = [
-  { districtTypeId: "logging_camp", biome: "forest", resourceId: "R:Wood", dailyAmount: 4 },
-  { districtTypeId: "logging_camp", biome: "plain", resourceId: "R:Wood", dailyAmount: 1 },
-  { districtTypeId: "stone_quarry", biome: "mountain", resourceId: "R:Stone", dailyAmount: 3 },
-  { districtTypeId: "iron_mine", biome: "mountain", resourceId: "R:Iron_Ore", dailyAmount: 2 },
-  { districtTypeId: "mithril_mine", biome: "mountain", resourceId: "R:Mithril_Ore", dailyAmount: 1 },
-  { districtTypeId: "mallorn_grove", biome: "forest", resourceId: "R:Mallorn", dailyAmount: 1 },
 ];
 
 // --- District prerequisites ----------------------------------------------
 
 export const districtPrerequisitesCatalogue = [
   { districtTypeId: "foundry", prerequisiteDistrictTypeId: "smithy" },
-  { districtTypeId: "mithril_mine", prerequisiteDistrictTypeId: "iron_mine" },
 ];
 
 // --- District adjacency bonuses ------------------------------------------
 
 export const districtAdjacencyBonusesCatalogue = [
   { districtTypeId: "bakery", adjacentDistrictTypeId: "wheat_farm", bonusType: "output_pct", bonusValue: 20 },
-  { districtTypeId: "smithy", adjacentDistrictTypeId: "iron_mine", bonusType: "output_pct", bonusValue: 15 },
+  { districtTypeId: "smithy", adjacentDistrictTypeId: "mine", bonusType: "output_pct", bonusValue: 15 },
   { districtTypeId: "foundry", adjacentDistrictTypeId: "smithy", bonusType: "output_pct", bonusValue: 10 },
-  { districtTypeId: "charcoal_burner", adjacentDistrictTypeId: "logging_camp", bonusType: "output_pct", bonusValue: 25 },
+  { districtTypeId: "charcoal_burner", adjacentDistrictTypeId: "forestry_camp", bonusType: "output_pct", bonusValue: 25 },
   { districtTypeId: "market", adjacentDistrictTypeId: "harbour", bonusType: "output_pct", bonusValue: 20 },
 ];
 
@@ -557,7 +592,8 @@ export const districtAdjacencyBonusesCatalogue = [
 
 export const factionDistrictRulesCatalogue = [
   // Shire: hobbits don't do heavy industry or war-breeding.
-  { factionId: "shire", districtTypeId: "iron_mine", ruleType: "restrict", params: {} },
+  { factionId: "shire", districtTypeId: "mine", ruleType: "restrict", params: {} },
+  { factionId: "shire", districtTypeId: "deep_mine", ruleType: "restrict", params: {} },
   { factionId: "shire", districtTypeId: "foundry", ruleType: "restrict", params: {} },
   { factionId: "shire", districtTypeId: "charcoal_burner", ruleType: "restrict", params: {} },
   { factionId: "shire", districtTypeId: "uruk_pit", ruleType: "restrict", params: {} },
@@ -569,7 +605,6 @@ export const factionDistrictRulesCatalogue = [
   { factionId: "isengard", districtTypeId: "uruk_pit", ruleType: "unlock", params: {} },
 
   // Mallorn Grove: Lothlórien alone keeps the way of it.
-  { factionId: "lothlorien", districtTypeId: "mallorn_grove", ruleType: "unlock", params: {} },
 
   // Swan Knight Hall: Dol Amroth's exclusively. And for them, it REPLACES
   // the ordinary barracks — their footsoldiers train as knights.
@@ -702,6 +737,17 @@ export const buildingTypesCatalogue: BuildingSeed[] = [
   { id: "goods_store", displayName: "Goods Store", category: "support", description: "A dry, bonded store — finished stock kept safe and counted, less lost to spoil.", provides: ["STORAGE"], quantities: { STORAGE: 3 }, minFootprintBlocks: 40 },
   { id: "materials_store", displayName: "Materials Store", category: "support", description: "Racked and sheltered raw stock, drawn as needed — less waste at the bench.", provides: ["STORAGE"], quantities: { STORAGE: 2 }, minFootprintBlocks: 30 },
   { id: "counting_room", displayName: "Counting Room", category: "support", description: "Ledgers and a strong-box. Sharp factors fetch a better price for the goods.", provides: ["STORAGE"], tierMin: "town" },
+
+  // --- Extraction output buildings (no fixed output — the chosen deposit
+  //     sets what they win; output scales with how many you raise) --------
+  { id: "mine_shaft", displayName: "Mine Shaft", category: "functional", description: "A sunk shaft with ladder-ways, a pit-head, and a spoil-heap.", provides: ["STORAGE"], minHeightBlocks: 8 },
+  { id: "quarry_face", displayName: "Quarry Face", category: "functional", description: "A worked stone face with sledways and a dressing-floor.", provides: ["STORAGE"], minFootprintBlocks: 40 },
+  { id: "logging_stand", displayName: "Felling Stand", category: "functional", description: "A cleared felling-stand with a hauling-way and a log-pond.", provides: ["STORAGE"], minFootprintBlocks: 40 },
+
+  // --- Extraction upgrades (support:extraction) ------------------------
+  { id: "drainage_pump", displayName: "Drainage Pump", category: "support", description: "A chain-pump that keeps the deep workings clear of water.", provides: [], minHeightBlocks: 5 },
+  { id: "winding_gear", displayName: "Winding Gear", category: "support", description: "A horse- or water-driven hoist that hauls more from greater depth.", provides: [], minHeightBlocks: 8 },
+  { id: "ore_washery", displayName: "Ore Washery", category: "support", description: "Stamps and washing-tables that recover more good stuff from the spoil.", provides: ["STORAGE"], minFootprintBlocks: 30 },
 ];
 
 // --- Building effects (district buffs from optional support buildings) ----
@@ -714,6 +760,10 @@ export const buildingEffectsCatalogue = [
   { buildingTypeId: "goods_store", effectType: "storage_capacity", magnitude: 100, note: "Bonded headroom for stock." },
   { buildingTypeId: "materials_store", effectType: "input_reduction_pct", magnitude: 20, note: "Banked inputs, less waste." },
   { buildingTypeId: "counting_room", effectType: "coin_pct", magnitude: 20, note: "A better price for the goods." },
+  // Extraction.
+  { buildingTypeId: "drainage_pump", effectType: "output_pct", magnitude: 15, note: "Dewatered workings can be driven deeper." },
+  { buildingTypeId: "winding_gear", effectType: "output_pct", magnitude: 12, note: "More hauled from greater depth." },
+  { buildingTypeId: "ore_washery", effectType: "output_pct", magnitude: 8, note: "More good stuff recovered from the spoil." },
 ];
 
 // --- Building outputs (per-building daily production) ---------------------
@@ -791,6 +841,10 @@ export const buildingTagsCatalogue = [
   { buildingTypeId: "goods_store", tag: "support:industrial" },
   { buildingTypeId: "materials_store", tag: "support:industrial" },
   { buildingTypeId: "counting_room", tag: "support:industrial" },
+  // Extraction upgrades.
+  { buildingTypeId: "drainage_pump", tag: "support:extraction" },
+  { buildingTypeId: "winding_gear", tag: "support:extraction" },
+  { buildingTypeId: "ore_washery", tag: "support:extraction" },
 ];
 
 // --- District required buildings ------------------------------------------
@@ -830,6 +884,21 @@ const districtUpgradeSlots: RequiredBuildingSeed[] = UPGRADEABLE_DISTRICTS.map(
     themeTag: "support:industrial",
     optional: true,
   }),
+);
+
+// Extraction archetypes: a ranged output-building slot + an optional
+// support:extraction upgrade slot (drainage, winding gear, ore-washery).
+const EXTRACTION_OUTPUT: Record<string, { building: string; max: number }> = {
+  mine: { building: "mine_shaft", max: 3 },
+  deep_mine: { building: "mine_shaft", max: 6 },
+  quarry: { building: "quarry_face", max: 4 },
+  forestry_camp: { building: "logging_stand", max: 4 },
+};
+const extractionSlots: RequiredBuildingSeed[] = Object.entries(EXTRACTION_OUTPUT).flatMap(
+  ([districtTypeId, { building, max }]) => [
+    { districtTypeId, kind: "specific", buildingTypeId: building, count: 1, maxCount: max, themeNote: null },
+    { districtTypeId, kind: "themed", buildingTypeId: null, count: 0, maxCount: 3, themeNote: "mine upgrades", themeTag: "support:extraction", optional: true },
+  ],
 );
 
 export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
@@ -888,6 +957,8 @@ export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
 
   // Optional workshop-upgrade slots on every industrial district.
   ...districtUpgradeSlots,
+  // Extraction archetypes: output building + optional upgrade slot.
+  ...extractionSlots,
 ];
 
 // --- District scale bonuses ("build big" reward) -------------------------
@@ -1160,11 +1231,10 @@ export const factionCultureCatalogue = [
 // --- District consumes (tag-based) ---------------------------------------
 
 export const districtConsumesCatalogue = [
-  { districtTypeId: "iron_mine", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
-  { districtTypeId: "mithril_mine", tagId: "T:Fuel", weightMin: 2, dailyAmount: 2 },
-  // Catalyst: the deep shafts must be re-shored with steel — a monthly,
-  // not daily, draw. consumptionPeriod marks it as a slow-burn input.
-  { districtTypeId: "mithril_mine", tagId: "T:Metal", weightMin: 3, dailyAmount: 1, consumptionPeriod: "monthly" },
+  // Mines burn fuel for lamps, pumps, and shoring — per shaft (extraction
+  // input scales with the extraction buildings, like output).
+  { districtTypeId: "mine", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
+  { districtTypeId: "deep_mine", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "bakery", tagId: "T:Grain", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "bakery", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "charcoal_burner", tagId: "T:Building", weightMin: 1, dailyAmount: 2 },
@@ -1185,7 +1255,7 @@ export const districtConsumesCatalogue = [
   { districtTypeId: "glassworks", tagId: "T:GlassRaw", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "glassworks", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "mint", tagId: "T:Metal", weightMin: 2, dailyAmount: 2 },
-  { districtTypeId: "jeweller", tagId: "T:Metal_Ore", weightMin: 3, dailyAmount: 1 },
+  { districtTypeId: "jeweller", tagId: "T:Precious", weightMin: 2, dailyAmount: 1 },
 ];
 
 // --- District produces (base, resource-based) ----------------------------
@@ -1197,17 +1267,10 @@ export const districtConsumesCatalogue = [
 // tile-based extraction/agriculture has a flat per-district yield.
 export const districtProducesCatalogue = [
   { districtTypeId: "wheat_farm", resourceId: "R:Wheat", dailyAmount: 4 },
-  { districtTypeId: "logging_camp", resourceId: "R:Wood", dailyAmount: 3 },
-  { districtTypeId: "stone_quarry", resourceId: "R:Stone", dailyAmount: 3 },
-  { districtTypeId: "iron_mine", resourceId: "R:Iron_Ore", dailyAmount: 2 },
-  { districtTypeId: "mithril_mine", resourceId: "R:Mithril_Ore", dailyAmount: 1 },
-  { districtTypeId: "mallorn_grove", resourceId: "R:Mallorn", dailyAmount: 1 },
   { districtTypeId: "charcoal_burner", resourceId: "R:Charcoal", dailyAmount: 2 },
   // New tile-based extraction / herding.
   { districtTypeId: "pasture", resourceId: "R:Wool", dailyAmount: 3 },
   { districtTypeId: "pasture", resourceId: "R:Hide", dailyAmount: 2, outputKind: "byproduct" },
-  { districtTypeId: "clay_pit", resourceId: "R:Clay", dailyAmount: 4 },
-  { districtTypeId: "sand_pit", resourceId: "R:Sand", dailyAmount: 4 },
 ];
 
 // --- Conditional production bonuses (the spec's bonuses_from) -------------
@@ -1245,7 +1308,7 @@ export const districtProductionBonusesCatalogue = [
 
 export const districtRecipesCatalogue = [
   {
-    districtTypeId: "logging_camp",
+    districtTypeId: "forestry_camp",
     recipeKey: "charcoal_prep",
     displayName: "Charcoal Preparation",
     description: "Burn part of the cut on site. Less timber out the gate, but charcoal alongside it.",

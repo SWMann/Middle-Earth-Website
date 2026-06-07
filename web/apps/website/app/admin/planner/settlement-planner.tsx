@@ -14,6 +14,7 @@ import {
   allowedHousing,
   allowedUpgrades,
   optionalSlot,
+  availableDeposits,
   computePreview,
   emptyPlan,
 } from "@/lib/planner/compute";
@@ -132,8 +133,21 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
       ...p,
       districts: [
         ...p.districts,
-        { uid: nextUid(), districtTypeId: id, buildings: defaultBuildings(id) },
+        {
+          uid: nextUid(),
+          districtTypeId: id,
+          buildings: defaultBuildings(id),
+          deposit: availableDeposits(catalogue, id, p.tier)[0]?.id,
+        },
       ],
+    }));
+
+  const setDeposit = (uid: string, depositId: string) =>
+    setPlan((p) => ({
+      ...p,
+      districts: p.districts.map((d) =>
+        d.uid === uid ? { ...d, deposit: depositId } : d,
+      ),
     }));
 
   const removeDistrict = (uid: string) =>
@@ -341,6 +355,32 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
                       remove
                     </button>
                   </div>
+
+                  {/* Extraction: deposit picker */}
+                  {dt.extractionMethod &&
+                    (() => {
+                      const deps = availableDeposits(catalogue, dt.id, plan.tier);
+                      return (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs opacity-60">Working</span>
+                          <select
+                            value={inst.deposit ?? ""}
+                            onChange={(e) => setDeposit(inst.uid, e.target.value)}
+                            className="flex-1 rounded border border-stone-300 dark:border-stone-700 bg-transparent px-2 py-1 text-sm"
+                          >
+                            {deps.length === 0 && (
+                              <option value="">— none at this tier —</option>
+                            )}
+                            {deps.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.displayName} ({d.baseYield}/shaft
+                                {d.requiresDiscovery ? ` · needs ${d.requiresDiscovery}` : ""})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })()}
 
                   {/* Residential: per-housing picker */}
                   {dt.capFromHousing && slot && (
@@ -1086,6 +1126,7 @@ function DistrictModal({
       {dt?.description && <p className="text-sm opacity-80">{dt.description}</p>}
 
       <Block title="In this plan">
+        {d.deposit && <Row label="Working" value={d.deposit.name} />}
         <Row label="Buildings" value={`${d.totalBuildings}${d.slotMin != null ? ` (${d.slotMin}–${d.slotMax})` : ""}`} />
         {d.popCap > 0 && <Row label="Population cap" value={fmt(d.popCap)} />}
         {Object.entries(d.popByClass).map(([c, n]) => (

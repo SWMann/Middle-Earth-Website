@@ -464,6 +464,28 @@ export const getBuildingOutputs = cache(async (buildingTypeId: string) => {
     .where(eq(schema.buildingOutputs.buildingTypeId, buildingTypeId));
 });
 
+/** Deposits a given extraction method can work (with their yielded resource). */
+export const getDepositsForMethod = cache(async (method: string) => {
+  return await db
+    .select({
+      id: schema.deposits.id,
+      displayName: schema.deposits.displayName,
+      resourceId: schema.deposits.resourceId,
+      resourceName: schema.resources.displayName,
+      baseYield: schema.deposits.baseYield,
+      tierMin: schema.deposits.tierMin,
+      biome: schema.deposits.biome,
+      terrain: schema.deposits.terrain,
+      requiresDiscovery: schema.deposits.requiresDiscovery,
+      rarity: schema.deposits.rarity,
+      note: schema.deposits.note,
+    })
+    .from(schema.deposits)
+    .innerJoin(schema.resources, eq(schema.deposits.resourceId, schema.resources.id))
+    .where(eq(schema.deposits.method, method))
+    .orderBy(desc(schema.deposits.baseYield));
+});
+
 /** The optional upgrade buildings a district accepts, with their buffs. */
 export const getDistrictUpgradeBuildings = cache(async (districtTypeId: string) => {
   const [optRow] = await db

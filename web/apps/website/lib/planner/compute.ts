@@ -46,6 +46,8 @@ export type PlanDistrict = {
   uid: string;
   districtTypeId: string;
   buildings: PlanDistrictBuilding[];
+  /** For extraction archetypes: the chosen deposit (config.deposits.id). */
+  deposit?: string;
 };
 export type PlanUnit = { unitTypeId: string; count: number };
 export type Plan = {
@@ -95,6 +97,23 @@ export function allowedHousing(cat: PlannerCatalogue, populationClass: string | 
       b.housingClass != null &&
       HOUSING_CLASS_ORDER.indexOf(b.housingClass) <= ceiling,
   );
+}
+
+/** Deposits an extraction archetype can work at the given settlement tier. */
+export function availableDeposits(
+  cat: PlannerCatalogue,
+  districtTypeId: string,
+  tier: string,
+) {
+  const dt = cat.districtTypes.find((d) => d.id === districtTypeId);
+  if (!dt?.extractionMethod) return [];
+  return cat.deposits
+    .filter(
+      (dep) =>
+        dep.method === dt.extractionMethod &&
+        tierIndex(dep.tierMin) <= tierIndex(tier),
+    )
+    .sort((a, b) => b.baseYield - a.baseYield);
 }
 
 /** The optional "workshop upgrades" slot a district accepts, if any. */
@@ -251,7 +270,18 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
         .reduce((s, b) => s + b.count, 0);
 
       const coinMult = outMult * (1 + support.coinPct / 100);
-      if (dt.outputFromBuildings) {
+
+      // Extraction archetype: the chosen deposit × the extraction buildings
+      // (shafts/faces/stands). totalBuildings already excludes support.
+      const chosenDeposit = dt.extractionMethod
+        ? cat.deposits.find((d) => d.id === inst.deposit) ??
+          availableDeposits(cat, dt.id, tier)[0]
+        : null;
+
+      if (dt.extractionMethod) {
+        if (chosenDeposit)
+          add(dProd, chosenDeposit.resourceId, chosenDeposit.baseYield * totalBuildings * outMult);
+      } else if (dt.outputFromBuildings) {
         // Output is the SUM of the production buildings' yields.
         for (const b of inst.buildings) {
           for (const o of outputsByBuilding.get(b.buildingTypeId) ?? []) {
@@ -260,16 +290,19 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
           }
         }
       } else {
-        // Flat per-district yield (tile-based extraction / agriculture).
+        // Flat per-district yield (farms, agriculture).
         for (const p of cat.produces.filter((x) => x.districtTypeId === dt.id))
           add(dProd, p.resourceId, p.dailyAmount * outMult);
       }
 
-      // Consumption: for output-from-buildings districts the input recipe is
-      // PER production building, scaled down by any input-saving upgrades.
-      const consumeMult =
-        (dt.outputFromBuildings ? outputBuildingCount : 1) *
-        (1 - support.inputRedPct / 100);
+      // Consumption: output-from-buildings and extraction districts scale the
+      // input recipe per building/shaft, cut by any input-saving upgrades.
+      const consumeScale = dt.outputFromBuildings
+        ? outputBuildingCount
+        : dt.extractionMethod
+          ? totalBuildings
+          : 1;
+      const consumeMult = consumeScale * (1 - support.inputRedPct / 100);
       const dCons: Num = {};
       for (const c of cat.consumes.filter((x) => x.districtTypeId === dt.id))
         if (c.consumptionPeriod === "daily") add(dCons, c.tagId, c.dailyAmount * consumeMult);
@@ -290,6 +323,9 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
         districtTypeId: dt.id,
         name: dt.displayName,
         category: dt.category,
+        deposit: chosenDeposit
+          ? { id: chosenDeposit.id, name: chosenDeposit.displayName }
+          : null,
         popCap: dPopCap,
         popByClass: dPop,
         totalBuildings,

@@ -19,6 +19,7 @@ import {
   getDistrictRequiredBuildings,
   getBuildingOutputs,
   getDistrictUpgradeBuildings,
+  getDepositsForMethod,
   getDistrictRequiredComponents,
   getTierDecorationThresholds,
   getAllOccupationClasses,
@@ -123,6 +124,11 @@ export default async function DistrictDetailPage({
 
   // Optional workshop-upgrade buildings this district accepts.
   const upgradeBuildings = await getDistrictUpgradeBuildings(district.id);
+
+  // Extraction archetypes: the deposits they can work.
+  const deposits = district.extractionMethod
+    ? await getDepositsForMethod(district.extractionMethod)
+    : [];
 
   // Collapse rows sharing a groupKey into a single "any one of" slot,
   // preserving first-seen order. Standalone rows (null groupKey) stay alone.
@@ -647,6 +653,49 @@ export default async function DistrictDetailPage({
                     </span>
                   ))}
                 </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Deposits worked ----- */}
+      {deposits.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-1">Deposits worked</h2>
+          <p className="text-xs opacity-60 mb-4 max-w-2xl">
+            Pick one deposit for this {district.displayName.toLowerCase()} to
+            work. Daily output is the deposit&apos;s yield × the extraction
+            buildings you raise inside × settlement tier × upgrades.
+          </p>
+          <ul className="space-y-1.5 text-sm">
+            {deposits.map((d) => (
+              <li
+                key={d.id}
+                className="flex items-baseline gap-3 flex-wrap border-b border-stone-100 dark:border-stone-900 py-1.5"
+              >
+                <span className="font-medium">{d.displayName}</span>
+                <Link
+                  href={{ pathname: `/resources/${encodeURIComponent(d.resourceId)}` }}
+                  className="text-xs text-stone-500 hover:underline"
+                >
+                  → {d.resourceName}
+                </Link>
+                {d.rarity !== "common" && (
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400">
+                    {d.rarity}
+                  </span>
+                )}
+                {d.requiresDiscovery && (
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">
+                    needs {d.requiresDiscovery}
+                  </span>
+                )}
+                <span className="ml-auto text-xs tabular-nums opacity-70">
+                  {d.baseYield}/building · {prettyTerm(d.tierMin)}+
+                  {d.biome ? ` · ${d.biome}` : ""}
+                  {d.terrain ? ` · ${d.terrain}` : ""}
+                </span>
               </li>
             ))}
           </ul>

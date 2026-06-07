@@ -73,6 +73,39 @@ export const resourceTags = config.table(
   }),
 );
 
+// --- Deposits (what extraction districts can work) -----------------------
+
+/**
+ * A workable deposit — a raw resource a player can extract, and what it
+ * takes. `method` ties it to an extraction archetype district (a Mine works
+ * 'mine' deposits, a Quarry works 'quarry' deposits…). The player picks the
+ * deposit per district instance; output = baseYield × the extraction
+ * buildings raised × tier × upgrades. This keeps one Mine district instead
+ * of one per ore.
+ */
+export const deposits = config.table("deposits", {
+  id: text("id").primaryKey(), // 'iron', 'coal', 'gold', 'stone', 'wood', ...
+  displayName: text("display_name").notNull(),
+  resourceId: text("resource_id")
+    .notNull()
+    .references(() => resources.id),
+  /** 'mine' | 'quarry' | 'forestry'. Matches district_types.extraction_method. */
+  method: text("method").notNull(),
+  /** Output per extraction building (shaft/face/stand) per day, pre-tier. */
+  baseYield: integer("base_yield").notNull(),
+  /** Minimum settlement tier to work it. */
+  tierMin: text("tier_min").notNull().default("village"),
+  /** Tile biome the deposit needs (informational gate). */
+  biome: text("biome"),
+  /** Terrain feature gate (coastal, river). */
+  terrain: text("terrain"),
+  /** Region discovery required (mithril, gems). */
+  requiresDiscovery: text("requires_discovery"),
+  /** 'common' | 'uncommon' | 'rare' — flavour + UI. */
+  rarity: text("rarity").notNull().default("common"),
+  note: text("note").notNull().default(""),
+});
+
 // --- District types -------------------------------------------------------
 
 export const districtTypes = config.table("district_types", {
@@ -145,6 +178,14 @@ export const districtTypes = config.table("district_types", {
    * district_produces amount (extraction/farms, which are tile-based).
    */
   outputFromBuildings: boolean("output_from_buildings").notNull().default(false),
+  /**
+   * Extraction archetype: 'mine' | 'quarry' | 'forestry'. When set, this is
+   * a deposit-working district — the player picks which DEPOSIT it works
+   * (config.deposits of the same method), and output = that deposit's yield
+   * × the extraction buildings (shafts/faces/stands) raised inside it. One
+   * Mine district covers every ore instead of a district per resource.
+   */
+  extractionMethod: text("extraction_method"),
   /**
    * For residential districts: the occupation class this quarter is FOR
    * (config.occupation_classes.id). It is the CEILING — the quarter accepts
@@ -987,6 +1028,7 @@ export const occupationClasses = config.table("occupation_classes", {
 
 export type Resource = typeof resources.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
+export type Deposit = typeof deposits.$inferSelect;
 export type DistrictType = typeof districtTypes.$inferSelect;
 export type UnitType = typeof unitTypes.$inferSelect;
 export type OccupationClass = typeof occupationClasses.$inferSelect;

@@ -32,6 +32,7 @@ export const getPlannerCatalogue = cache(async () => {
     buildingVariants,
     buildingTags,
     resourceTags,
+    deposits,
     tierThresholds,
     factionRules,
     unitTypes,
@@ -86,6 +87,7 @@ export const getPlannerCatalogue = cache(async () => {
       .from(schema.buildingVariants),
     db.select().from(schema.buildingTags),
     db.select().from(schema.resourceTags),
+    db.select().from(schema.deposits),
     db.select().from(schema.tierDecorationThresholds),
     db.select().from(schema.factionDistrictRules),
     db
@@ -143,6 +145,7 @@ export const getPlannerCatalogue = cache(async () => {
     buildingVariants,
     buildingTags,
     resourceTags,
+    deposits,
     tierThresholds,
     factionRules,
     unitTypes,

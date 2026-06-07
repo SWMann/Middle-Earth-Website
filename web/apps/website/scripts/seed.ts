@@ -26,6 +26,7 @@ import {
   tagsCatalogue,
   resourcesCatalogue,
   resourceTagMappings,
+  depositsCatalogue,
   districtTypesCatalogue,
   districtStaffingCatalogue,
   districtEffectsCatalogue,
@@ -604,6 +605,23 @@ async function main() {
     await db.insert(schema.resourceTags).values(rt);
   }
 
+  await db.execute(sqlOp`DELETE FROM config.deposits`);
+  for (const dep of depositsCatalogue) {
+    await db.insert(schema.deposits).values({
+      id: dep.id,
+      displayName: dep.displayName,
+      resourceId: dep.resourceId,
+      method: dep.method,
+      baseYield: dep.baseYield,
+      tierMin: dep.tierMin ?? "village",
+      biome: dep.biome ?? null,
+      terrain: dep.terrain ?? null,
+      requiresDiscovery: dep.requiresDiscovery ?? null,
+      rarity: dep.rarity ?? "common",
+      note: dep.note ?? "",
+    });
+  }
+
   for (const d of districtTypesCatalogue) {
     const row = {
       id: d.id,
@@ -626,6 +644,7 @@ async function main() {
       upgradesFrom: d.upgradesFrom ?? null,
       capFromHousing: d.capFromHousing ?? false,
       outputFromBuildings: d.outputFromBuildings ?? false,
+      extractionMethod: d.extractionMethod ?? null,
       populationClass: d.populationClass ?? null,
       metadata: d.metadata ?? {},
     };
@@ -654,6 +673,7 @@ async function main() {
           upgradesFrom: row.upgradesFrom,
           capFromHousing: row.capFromHousing,
           outputFromBuildings: row.outputFromBuildings,
+          extractionMethod: row.extractionMethod,
           populationClass: row.populationClass,
           metadata: row.metadata,
         },
@@ -884,6 +904,14 @@ async function main() {
   for (const t of districtTierOutputCatalogue) {
     await db.insert(schema.districtTierOutput).values(t);
   }
+
+  // Extraction rework: the old single-resource mines/quarries/pits are now
+  // deposit-working archetypes (mine/quarry/forestry_camp). Drop the stale
+  // district rows — all their child rows (produces/consumes/biome/etc.) were
+  // wiped and reinserted above without them.
+  await db.execute(
+    sqlOp`DELETE FROM config.district_types WHERE id IN ('iron_mine', 'stone_quarry', 'mithril_mine', 'mallorn_grove', 'logging_camp', 'clay_pit', 'sand_pit')`,
+  );
 
   for (const u of unitTypesCatalogue) {
     await db
