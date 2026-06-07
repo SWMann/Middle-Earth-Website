@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ComingSoon } from "@/components/coming-soon";
 
 export default function AdminPage() {
@@ -8,9 +9,12 @@ export default function AdminPage() {
         faction admin views, config editor, and player management.
       </p>
       <p>
-        Phase 1 ships the route stub only. No staff role check is enforced
-        yet beyond authentication; the role model lands when the admin
-        console comes online.
+        Available now:{" "}
+        <Link href={{ pathname: "/admin/planner" }} className="underline">
+          Settlement Planner
+        </Link>{" "}
+        — plan a settlement for any faction and tier and preview its economy
+        and systems live.
       </p>
     </ComingSoon>
   );
