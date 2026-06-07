@@ -37,6 +37,7 @@ import {
   buildingTypesCatalogue,
   buildingTagsCatalogue,
   districtRequiredBuildingsCatalogue,
+  districtScaleBonusesCatalogue,
   districtRequiredComponentsCatalogue,
   districtFootprintCatalogue,
   decorationCriteriaCatalogue,
@@ -746,6 +747,7 @@ async function main() {
       kind: rb.kind,
       buildingTypeId: rb.buildingTypeId,
       count: rb.count,
+      maxCount: rb.maxCount ?? null,
       themeNote: rb.themeNote,
       themeTag: rb.themeTag ?? null,
       groupKey: rb.groupKey ?? null,
@@ -753,6 +755,10 @@ async function main() {
   }
   for (const rc of districtRequiredComponentsCatalogue) {
     await db.insert(schema.districtRequiredComponents).values(rc);
+  }
+  await db.execute(sqlOp`DELETE FROM config.district_scale_bonuses`);
+  for (const sb of districtScaleBonusesCatalogue) {
+    await db.insert(schema.districtScaleBonuses).values(sb);
   }
 
   // Cultures + cosmetic building variants + approved palettes.

@@ -482,6 +482,7 @@ export const getDistrictRequiredBuildings = cache(
         buildingTypeId: schema.districtRequiredBuildings.buildingTypeId,
         buildingName: schema.buildingTypes.displayName,
         count: schema.districtRequiredBuildings.count,
+        maxCount: schema.districtRequiredBuildings.maxCount,
         themeNote: schema.districtRequiredBuildings.themeNote,
         themeTag: schema.districtRequiredBuildings.themeTag,
         groupKey: schema.districtRequiredBuildings.groupKey,
@@ -553,6 +554,15 @@ export const getBuildingDistrictUsage = cache(async () => {
       ),
     )
     .where(eq(schema.districtRequiredBuildings.kind, "specific"));
+});
+
+/** The "build big" scale dividend a district earns per extra building. */
+export const getDistrictScaleBonuses = cache(async (districtTypeId: string) => {
+  return await db
+    .select()
+    .from(schema.districtScaleBonuses)
+    .where(eq(schema.districtScaleBonuses.districtTypeId, districtTypeId))
+    .orderBy(desc(schema.districtScaleBonuses.perBuilding));
 });
 
 export const getDecorationCriteria = cache(async () => {

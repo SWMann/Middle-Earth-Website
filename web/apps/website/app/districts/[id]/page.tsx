@@ -20,6 +20,7 @@ import {
   getDistrictRequiredComponents,
   getTierDecorationThresholds,
   getAllOccupationClasses,
+  getDistrictScaleBonuses,
 } from "@/lib/data/catalogue";
 import { getFaction } from "@/lib/data/factions";
 import { FactionTag } from "@/components/tags/faction-tag";
@@ -66,6 +67,7 @@ export default async function DistrictDetailPage({
     reqComponents,
     tierThresholds,
     occupationClasses,
+    scaleBonuses,
   ] = await Promise.all([
     getDistrictConsumes(district.id),
     getDistrictProduces(district.id),
@@ -83,6 +85,7 @@ export default async function DistrictDetailPage({
     getDistrictRequiredComponents(district.id),
     getTierDecorationThresholds(),
     getAllOccupationClasses(),
+    getDistrictScaleBonuses(district.id),
   ]);
 
   const decoThreshold =
@@ -276,14 +279,14 @@ export default async function DistrictDetailPage({
                 {buildingSlots.map((slot) => {
                   // "Any one of" group.
                   if (slot.rows.length > 1) {
-                    const count = slot.rows[0].count;
+                    const r0 = slot.rows[0];
                     return (
                       <li
                         key={slot.key}
                         className="flex items-baseline gap-2 flex-wrap"
                       >
-                        <span className="tabular-nums text-stone-500 w-7">
-                          {count}×
+                        <span className="tabular-nums text-stone-500 min-w-9">
+                          {countLabel(r0.count, r0.maxCount)}×
                         </span>
                         <span className="flex items-baseline gap-1.5 flex-wrap">
                           {slot.rows.map((r, i) => (
@@ -324,8 +327,8 @@ export default async function DistrictDetailPage({
                       key={slot.key}
                       className="flex items-baseline gap-2 flex-wrap"
                     >
-                      <span className="tabular-nums text-stone-500 w-7">
-                        {b.count}×
+                      <span className="tabular-nums text-stone-500 min-w-9">
+                        {countLabel(b.count, b.maxCount)}×
                       </span>
                       {b.kind === "specific" && b.buildingTypeId ? (
                         <Link
@@ -407,6 +410,55 @@ export default async function DistrictDetailPage({
           )}
         </section>
       )}
+
+      {/* ----- Economy of scale ----- */}
+      {scaleBonuses.length > 0 &&
+        (() => {
+          // The widest building range on this district = how much "bigger"
+          // you can build, and therefore how far the dividend stacks.
+          const span = Math.max(
+            0,
+            ...reqBuildings.map((b) => (b.maxCount ?? b.count) - b.count),
+          );
+          return (
+            <section>
+              <h2 className="text-lg font-semibold mb-1">Economy of scale</h2>
+              <p className="text-xs opacity-60 mb-4 max-w-2xl">
+                Build big. Every building you raise beyond the minimum earns a
+                standing bonus — so one large district out-performs several
+                small ones per head, and you pay a single commission and upkeep
+                instead of one for each. The dividend stacks up to the maximum
+                size.
+              </p>
+              <ul className="space-y-1.5 text-sm">
+                {scaleBonuses.map((s) => (
+                  <li
+                    key={s.bonusType}
+                    className="flex items-baseline gap-3 flex-wrap border-b border-stone-100 dark:border-stone-900 py-1.5"
+                  >
+                    <span className="font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+                      {scaleBonusLabel(s.bonusType, s.perBuilding)}
+                    </span>
+                    <span className="text-xs opacity-60">
+                      per building beyond the minimum
+                    </span>
+                    {span > 0 && (
+                      <span className="ml-auto text-xs tabular-nums opacity-70">
+                        up to {scaleBonusLabel(s.bonusType, s.perBuilding * span)}{" "}
+                        at full size
+                      </span>
+                    )}
+                    {s.note && (
+                      <span className="basis-full text-xs opacity-50">
+                        {s.note}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })()}
 
       {/* ----- Location & limits ----- */}
       {(district.requiredBiomes ||
@@ -938,6 +990,24 @@ const CLASS_ORDER = ["peasant", "artisan", "merchant", "scholar", "noble"];
 function lesserClasses(classId: string): string[] {
   const i = CLASS_ORDER.indexOf(classId);
   return i <= 0 ? [] : CLASS_ORDER.slice(0, i);
+}
+
+function countLabel(count: number, maxCount: number | null): string {
+  return maxCount != null && maxCount > count ? `${count}–${maxCount}` : `${count}`;
+}
+
+const SCALE_BONUS_LABEL: Record<string, (n: number) => string> = {
+  tax_yield_pct: (n) => `+${n}% tax yield`,
+  dp_yield_pct: (n) => `+${n}% Diplomacy`,
+  output_pct: (n) => `+${n}% output`,
+  upkeep_reduction_pct: (n) => `−${n}% upkeep`,
+  prestige: (n) => `+${n} prestige`,
+};
+
+function scaleBonusLabel(type: string, n: number): string {
+  return (SCALE_BONUS_LABEL[type] ?? ((x: number) => `+${x} ${prettyTerm(type)}`))(
+    n,
+  );
 }
 
 function footprintRange(

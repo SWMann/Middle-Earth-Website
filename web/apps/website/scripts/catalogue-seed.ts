@@ -612,6 +612,8 @@ export type RequiredBuildingSeed = {
   kind: string;
   buildingTypeId: string | null;
   count: number;
+  /** Upper bound of the slot. Omit for a fixed requirement (= count). */
+  maxCount?: number;
   themeNote: string | null;
   themeTag?: string;
   groupKey?: string;
@@ -630,13 +632,13 @@ export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
   { districtTypeId: "foundry", kind: "specific", buildingTypeId: "anvil_shed", count: 1, themeNote: null },
   { districtTypeId: "barracks", kind: "specific", buildingTypeId: "bunkhouse", count: 2, themeNote: null },
   { districtTypeId: "barracks", kind: "specific", buildingTypeId: "tower_armoury", count: 1, themeNote: null },
-  { districtTypeId: "stables", kind: "specific", buildingTypeId: "stable_block", count: 2, themeNote: null },
+  { districtTypeId: "stables", kind: "specific", buildingTypeId: "stable_block", count: 2, maxCount: 4, themeNote: null },
   { districtTypeId: "swan_knight_hall", kind: "specific", buildingTypeId: "stable_block", count: 2, themeNote: null },
   { districtTypeId: "swan_knight_hall", kind: "specific", buildingTypeId: "captains_hall", count: 1, themeNote: null },
   { districtTypeId: "great_hall", kind: "specific", buildingTypeId: "captains_hall", count: 1, themeNote: null },
   { districtTypeId: "great_hall", kind: "specific", buildingTypeId: "hearth_hall", count: 1, themeNote: null },
   { districtTypeId: "library", kind: "specific", buildingTypeId: "scriptorium", count: 2, themeNote: null },
-  { districtTypeId: "market", kind: "specific", buildingTypeId: "market_stalls", count: 2, themeNote: null },
+  { districtTypeId: "market", kind: "specific", buildingTypeId: "market_stalls", count: 2, maxCount: 5, themeNote: null },
   { districtTypeId: "healing_house", kind: "specific", buildingTypeId: "healing_ward", count: 2, themeNote: null },
   { districtTypeId: "healing_house", kind: "specific", buildingTypeId: "well_house", count: 1, themeNote: null },
   { districtTypeId: "watchtower", kind: "specific", buildingTypeId: "watchpost", count: 1, themeNote: null },
@@ -646,19 +648,54 @@ export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
   // class ceiling (district populationClass vs each building's housingClass)
   // is enforced separately, so the player is free to fill the slots with any
   // housing of the quarter's class or lower.
-  { districtTypeId: "crofters_holding", kind: "themed", buildingTypeId: null, count: 2, themeNote: "peasant housing", themeTag: "theme:residential" },
-  { districtTypeId: "cottage_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "peasant housing", themeTag: "theme:residential" },
-  { districtTypeId: "fishing_village", kind: "themed", buildingTypeId: null, count: 3, themeNote: "peasant housing", themeTag: "theme:residential" },
-  { districtTypeId: "longhouse_steading", kind: "themed", buildingTypeId: null, count: 2, themeNote: "communal housing", themeTag: "theme:residential" },
-  { districtTypeId: "common_quarter", kind: "themed", buildingTypeId: null, count: 4, themeNote: "peasant housing", themeTag: "theme:residential" },
-  { districtTypeId: "artisans_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "artisan housing", themeTag: "theme:residential" },
-  { districtTypeId: "craft_lane", kind: "themed", buildingTypeId: null, count: 4, themeNote: "artisan housing", themeTag: "theme:residential" },
-  { districtTypeId: "merchants_row", kind: "themed", buildingTypeId: null, count: 3, themeNote: "merchant housing", themeTag: "theme:residential" },
-  { districtTypeId: "counting_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "merchant housing", themeTag: "theme:residential" },
-  { districtTypeId: "scholars_close", kind: "themed", buildingTypeId: null, count: 3, themeNote: "scholar housing", themeTag: "theme:residential" },
-  { districtTypeId: "cloister", kind: "themed", buildingTypeId: null, count: 2, themeNote: "scholar housing", themeTag: "theme:residential" },
-  { districtTypeId: "noble_estate", kind: "themed", buildingTypeId: null, count: 2, themeNote: "housing (manor + servants)", themeTag: "theme:residential" },
-  { districtTypeId: "high_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "noble housing", themeTag: "theme:residential" },
+  { districtTypeId: "crofters_holding", kind: "themed", buildingTypeId: null, count: 2, maxCount: 4, themeNote: "peasant housing", themeTag: "theme:residential" },
+  { districtTypeId: "cottage_quarter", kind: "themed", buildingTypeId: null, count: 3, maxCount: 8, themeNote: "peasant housing", themeTag: "theme:residential" },
+  { districtTypeId: "fishing_village", kind: "themed", buildingTypeId: null, count: 3, maxCount: 6, themeNote: "peasant housing", themeTag: "theme:residential" },
+  { districtTypeId: "longhouse_steading", kind: "themed", buildingTypeId: null, count: 2, maxCount: 5, themeNote: "communal housing", themeTag: "theme:residential" },
+  { districtTypeId: "common_quarter", kind: "themed", buildingTypeId: null, count: 4, maxCount: 12, themeNote: "peasant housing", themeTag: "theme:residential" },
+  { districtTypeId: "artisans_quarter", kind: "themed", buildingTypeId: null, count: 3, maxCount: 6, themeNote: "artisan housing", themeTag: "theme:residential" },
+  { districtTypeId: "craft_lane", kind: "themed", buildingTypeId: null, count: 4, maxCount: 9, themeNote: "artisan housing", themeTag: "theme:residential" },
+  { districtTypeId: "merchants_row", kind: "themed", buildingTypeId: null, count: 3, maxCount: 6, themeNote: "merchant housing", themeTag: "theme:residential" },
+  { districtTypeId: "counting_quarter", kind: "themed", buildingTypeId: null, count: 3, maxCount: 7, themeNote: "merchant housing", themeTag: "theme:residential" },
+  { districtTypeId: "scholars_close", kind: "themed", buildingTypeId: null, count: 3, maxCount: 6, themeNote: "scholar housing", themeTag: "theme:residential" },
+  { districtTypeId: "cloister", kind: "themed", buildingTypeId: null, count: 2, maxCount: 6, themeNote: "scholar housing", themeTag: "theme:residential" },
+  { districtTypeId: "noble_estate", kind: "themed", buildingTypeId: null, count: 2, maxCount: 5, themeNote: "housing (manor + servants)", themeTag: "theme:residential" },
+  { districtTypeId: "high_quarter", kind: "themed", buildingTypeId: null, count: 3, maxCount: 6, themeNote: "noble housing", themeTag: "theme:residential" },
+];
+
+// --- District scale bonuses ("build big" reward) -------------------------
+// For each building raised beyond a district's MINIMUM (up to its max), the
+// district earns this bonus. So one large quarter beats several small ones
+// per capita — on top of paying a single commission + upkeep instead of many.
+// perBuilding is a percentage (or flat, for 'prestige').
+
+export const districtScaleBonusesCatalogue = [
+  // Peasant — modest density dividend.
+  { districtTypeId: "crofters_holding", bonusType: "tax_yield_pct", perBuilding: 2, note: "More holdings worked, more to tithe." },
+  { districtTypeId: "cottage_quarter", bonusType: "tax_yield_pct", perBuilding: 2, note: "A fuller lane pays more in poll-tax." },
+  { districtTypeId: "fishing_village", bonusType: "output_pct", perBuilding: 3, note: "More boats, a bigger catch landed." },
+  { districtTypeId: "longhouse_steading", bonusType: "tax_yield_pct", perBuilding: 2, note: "A larger steading musters more in render." },
+  { districtTypeId: "common_quarter", bonusType: "tax_yield_pct", perBuilding: 2, note: "City density concentrates taxable trade." },
+  { districtTypeId: "common_quarter", bonusType: "upkeep_reduction_pct", perBuilding: 2, note: "Shared wells and lanes spread the upkeep." },
+  // Artisan — economies of the workshop.
+  { districtTypeId: "artisans_quarter", bonusType: "output_pct", perBuilding: 3, note: "Shared tools and apprentices lift every shop." },
+  { districtTypeId: "artisans_quarter", bonusType: "tax_yield_pct", perBuilding: 2, note: "" },
+  { districtTypeId: "craft_lane", bonusType: "output_pct", perBuilding: 3, note: "A whole street of crafts feeds off itself." },
+  // Merchant — the wealthiest density dividend.
+  { districtTypeId: "merchants_row", bonusType: "tax_yield_pct", perBuilding: 4, note: "Clustered counting-houses move more coin." },
+  { districtTypeId: "counting_quarter", bonusType: "tax_yield_pct", perBuilding: 4, note: "The great houses set the city's prices." },
+  { districtTypeId: "counting_quarter", bonusType: "upkeep_reduction_pct", perBuilding: 2, note: "" },
+  // Scholar — a fuller precinct generates more Diplomacy.
+  { districtTypeId: "scholars_close", bonusType: "dp_yield_pct", perBuilding: 3, note: "More lettered hands, more counsel sent abroad." },
+  { districtTypeId: "cloister", bonusType: "dp_yield_pct", perBuilding: 4, note: "A great order's voice carries far." },
+  // Noble — standing, and the tax of the rich.
+  { districtTypeId: "noble_estate", bonusType: "prestige", perBuilding: 1, note: "A grander seat lends the settlement standing." },
+  { districtTypeId: "noble_estate", bonusType: "tax_yield_pct", perBuilding: 3, note: "" },
+  { districtTypeId: "high_quarter", bonusType: "prestige", perBuilding: 1, note: "A crowded high quarter overawes rivals." },
+  { districtTypeId: "high_quarter", bonusType: "tax_yield_pct", perBuilding: 4, note: "" },
+  // A couple of non-residential examples (the mechanic is general).
+  { districtTypeId: "market", bonusType: "tax_yield_pct", perBuilding: 3, note: "More stalls, more tolls at the weigh-house." },
+  { districtTypeId: "stables", bonusType: "output_pct", perBuilding: 4, note: "A larger yard breaks more mounts at once." },
 ];
 
 // --- District required components -----------------------------------------

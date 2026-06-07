@@ -571,13 +571,56 @@ export const districtRequiredBuildings = config.table(
       .references(() => districtTypes.id),
     kind: text("kind").notNull().default("specific"), // 'specific' | 'themed'
     buildingTypeId: text("building_type_id").references(() => buildingTypes.id),
+    /** Minimum buildings required for the district to count as complete. */
     count: integer("count").notNull().default(1),
+    /**
+     * Maximum buildings the slot accepts. NULL = exactly `count` (a fixed
+     * requirement). When > count, the player chooses how big to build the
+     * district — anywhere in [count, maxCount]. This is what lets a quarter
+     * be small or large; the scale bonus rewards filling it.
+     */
+    maxCount: integer("max_count"),
     themeNote: text("theme_note"),
     /** For 'themed' rows: the building_tags value that satisfies it. */
     themeTag: text("theme_tag"),
     /** Rows sharing a key are mutually-substitutable ("any one of"). */
     groupKey: text("group_key"),
   },
+);
+
+/**
+ * The "build big" reward (anti-sprawl). For each building raised in a
+ * district beyond its MINIMUM requirement, apply a bonus — up to maxBuildings
+ * extra. So one large quarter out-performs several small ones per capita,
+ * on top of paying a single commission + upkeep instead of many. Open enum
+ * on bonusType; the mod applies it during the tick.
+ *
+ * Known bonusType values (grow freely):
+ *   tax_yield_pct        residents are more taxable at density
+ *   dp_yield_pct         a larger scholarly precinct yields more Diplomacy
+ *   output_pct           more workshops → more goods
+ *   prestige             standing the settlement gains from a grand quarter
+ *   upkeep_reduction_pct shared amenities lower per-building upkeep
+ */
+export const districtScaleBonuses = config.table(
+  "district_scale_bonuses",
+  {
+    districtTypeId: text("district_type_id")
+      .notNull()
+      .references(() => districtTypes.id),
+    bonusType: text("bonus_type").notNull(),
+    /** Bonus granted per building beyond the district's minimum. */
+    perBuilding: integer("per_building").notNull(),
+    /**
+     * Cap on how many extra buildings count toward the bonus. NULL = up to
+     * the requirement's maxCount (i.e. the whole range).
+     */
+    maxBuildings: integer("max_buildings"),
+    note: text("note").notNull().default(""),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.districtTypeId, t.bonusType] }),
+  }),
 );
 
 /**
@@ -894,6 +937,7 @@ export type FunctionalComponent = typeof functionalComponents.$inferSelect;
 export type BuildingTag = typeof buildingTags.$inferSelect;
 export type DecorationCriterion = typeof decorationCriteria.$inferSelect;
 export type TierDecorationThreshold = typeof tierDecorationThresholds.$inferSelect;
+export type DistrictScaleBonus = typeof districtScaleBonuses.$inferSelect;
 export type Culture = typeof cultures.$inferSelect;
 export type CulturePalette = typeof culturePalettes.$inferSelect;
 export type BuildingVariant = typeof buildingVariants.$inferSelect;
