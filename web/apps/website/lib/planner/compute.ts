@@ -74,7 +74,10 @@ export function primarySlot(
   cat: PlannerCatalogue,
   districtTypeId: string,
 ): { min: number; max: number } | null {
-  const rows = cat.requiredBuildings.filter((r) => r.districtTypeId === districtTypeId);
+  // Optional upgrade slots are not the primary slot.
+  const rows = cat.requiredBuildings.filter(
+    (r) => r.districtTypeId === districtTypeId && !r.optional,
+  );
   const themed = rows.find((r) => r.kind === "themed");
   const ranged = themed ?? rows.find((r) => r.maxCount != null && r.maxCount > r.count);
   if (!ranged) return null;
@@ -92,6 +95,25 @@ export function allowedHousing(cat: PlannerCatalogue, populationClass: string | 
       b.housingClass != null &&
       HOUSING_CLASS_ORDER.indexOf(b.housingClass) <= ceiling,
   );
+}
+
+/** The optional "workshop upgrades" slot a district accepts, if any. */
+export function optionalSlot(cat: PlannerCatalogue, districtTypeId: string) {
+  return (
+    cat.requiredBuildings.find(
+      (r) => r.districtTypeId === districtTypeId && r.optional,
+    ) ?? null
+  );
+}
+
+/** Support/upgrade buildings a district's optional slot accepts. */
+export function allowedUpgrades(cat: PlannerCatalogue, districtTypeId: string) {
+  const slot = optionalSlot(cat, districtTypeId);
+  if (!slot?.themeTag) return [];
+  const tagged = new Set(
+    cat.buildingTags.filter((t) => t.tag === slot.themeTag).map((t) => t.buildingTypeId),
+  );
+  return cat.buildingTypes.filter((b) => tagged.has(b.id));
 }
 
 // --- The preview computation --------------------------------------------
@@ -122,6 +144,14 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
   }
   const hasOutput = new Set(cat.buildingOutputs.map((o) => o.buildingTypeId));
 
+  // Per-building district buffs (optional support/upgrade buildings).
+  const effectsByBuilding = new Map<string, typeof cat.buildingEffects>();
+  for (const e of cat.buildingEffects) {
+    if (!effectsByBuilding.has(e.buildingTypeId)) effectsByBuilding.set(e.buildingTypeId, []);
+    effectsByBuilding.get(e.buildingTypeId)!.push(e);
+  }
+  const hasEffect = new Set(cat.buildingEffects.map((e) => e.buildingTypeId));
+
   // resourceId -> the tags it satisfies (for supply-chain reconciliation).
   const tagsByResource = new Map<string, Set<string>>();
   for (const rt of cat.resourceTags) {
@@ -137,7 +167,12 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
       const dt = dtById.get(inst.districtTypeId);
       if (!dt) return null;
 
-      const totalBuildings = inst.buildings.reduce((s, b) => s + b.count, 0);
+      // Buildings filling the PRIMARY slot (housing / output / stalls) — the
+      // scale dividend and the size display count these, NOT the optional
+      // support/upgrade buildings (which have their own buffs).
+      const totalBuildings = inst.buildings
+        .filter((b) => !hasEffect.has(b.buildingTypeId))
+        .reduce((s, b) => s + b.count, 0);
       const slot = primarySlot(cat, dt.id);
       const minBuildings = slot?.min ?? 0;
       const extra = Math.max(0, totalBuildings - minBuildings);
@@ -186,7 +221,27 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
         (t) => t.districtTypeId === dt.id && t.tier === tier,
       );
       const tierMult = (tierMultRow?.multiplierPct ?? 100) / 100;
-      const outMult = tierMult * (1 + outputScalePct / 100);
+
+      // Optional support/upgrade buildings stack their district buffs.
+      const support: {
+        outputPct: number;
+        inputRedPct: number;
+        coinPct: number;
+        list: { buildingTypeId: string; count: number }[];
+      } = { outputPct: 0, inputRedPct: 0, coinPct: 0, list: [] };
+      for (const b of inst.buildings) {
+        const effs = effectsByBuilding.get(b.buildingTypeId);
+        if (!effs) continue;
+        support.list.push({ buildingTypeId: b.buildingTypeId, count: b.count });
+        for (const e of effs) {
+          if (e.effectType === "output_pct") support.outputPct += e.magnitude * b.count;
+          else if (e.effectType === "input_reduction_pct") support.inputRedPct += e.magnitude * b.count;
+          else if (e.effectType === "coin_pct") support.coinPct += e.magnitude * b.count;
+        }
+      }
+
+      const outMult =
+        tierMult * (1 + outputScalePct / 100) * (1 + support.outputPct / 100);
       const dProd: Num = {};
       let dEffectCoin = 0;
 
@@ -195,11 +250,12 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
         .filter((b) => hasOutput.has(b.buildingTypeId))
         .reduce((s, b) => s + b.count, 0);
 
+      const coinMult = outMult * (1 + support.coinPct / 100);
       if (dt.outputFromBuildings) {
         // Output is the SUM of the production buildings' yields.
         for (const b of inst.buildings) {
           for (const o of outputsByBuilding.get(b.buildingTypeId) ?? []) {
-            if (o.outputKind === "coin") dEffectCoin += o.dailyAmount * b.count * outMult;
+            if (o.outputKind === "coin") dEffectCoin += o.dailyAmount * b.count * coinMult;
             else if (o.resourceId) add(dProd, o.resourceId, o.dailyAmount * b.count * outMult);
           }
         }
@@ -210,8 +266,10 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
       }
 
       // Consumption: for output-from-buildings districts the input recipe is
-      // PER production building, so input scales with output.
-      const consumeMult = dt.outputFromBuildings ? outputBuildingCount : 1;
+      // PER production building, scaled down by any input-saving upgrades.
+      const consumeMult =
+        (dt.outputFromBuildings ? outputBuildingCount : 1) *
+        (1 - support.inputRedPct / 100);
       const dCons: Num = {};
       for (const c of cat.consumes.filter((x) => x.districtTypeId === dt.id))
         if (c.consumptionPeriod === "daily") add(dCons, c.tagId, c.dailyAmount * consumeMult);
@@ -253,6 +311,11 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
           .sort((a, b) => b.amount - a.amount),
         staffDemand,
         scale,
+        upgradeBuff: {
+          outputPct: support.outputPct,
+          inputRedPct: support.inputRedPct,
+          coinPct: support.coinPct,
+        },
         coinNet: dTax + dEffectCoin - dt.upkeepCoinDaily * (1 - upkeepRedPct / 100),
         buildCoin: dt.buildCoinCost,
         buildDp: dt.buildDpCost,

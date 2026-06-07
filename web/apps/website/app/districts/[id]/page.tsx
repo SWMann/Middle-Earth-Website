@@ -18,6 +18,7 @@ import {
   getDistrictRecipes,
   getDistrictRequiredBuildings,
   getBuildingOutputs,
+  getDistrictUpgradeBuildings,
   getDistrictRequiredComponents,
   getTierDecorationThresholds,
   getAllOccupationClasses,
@@ -120,13 +121,18 @@ export default async function DistrictDetailPage({
     : [];
   const producingBuildings = outputBuildings.filter((b) => b.outputs.length > 0);
 
+  // Optional workshop-upgrade buildings this district accepts.
+  const upgradeBuildings = await getDistrictUpgradeBuildings(district.id);
+
   // Collapse rows sharing a groupKey into a single "any one of" slot,
   // preserving first-seen order. Standalone rows (null groupKey) stay alone.
+  // Optional rows are surfaced separately, not as required slots.
   type ReqBuilding = (typeof reqBuildings)[number];
   type Slot = { key: string; rows: [ReqBuilding, ...ReqBuilding[]] };
   const buildingSlots: Slot[] = [];
   const slotByKey = new Map<string, Slot>();
   for (const b of reqBuildings) {
+    if (b.optional) continue;
     if (b.groupKey) {
       const existing = slotByKey.get(b.groupKey);
       if (existing) {
@@ -641,6 +647,50 @@ export default async function DistrictDetailPage({
                     </span>
                   ))}
                 </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Optional upgrades ----- */}
+      {upgradeBuildings.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-1">Optional upgrades</h2>
+          <p className="text-xs opacity-60 mb-4 max-w-2xl">
+            Support buildings you may add to upgrade this district — not
+            required, but each one buffs it. Their effects stack.
+          </p>
+          <ul className="space-y-1.5 text-sm">
+            {upgradeBuildings.map((u) => (
+              <li
+                key={u.id}
+                className="flex items-baseline gap-3 flex-wrap border-b border-stone-100 dark:border-stone-900 py-1.5"
+              >
+                <Link
+                  href={{ pathname: `/buildings`, hash: u.id }}
+                  className="font-medium hover:underline"
+                >
+                  {u.displayName}
+                </Link>
+                <span className="ml-auto flex flex-wrap gap-1.5">
+                  {u.effects.map((e) => (
+                    <span
+                      key={e.type}
+                      className="text-[11px] px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-300"
+                    >
+                      {e.type === "output_pct"
+                        ? `+${e.magnitude}% output`
+                        : e.type === "input_reduction_pct"
+                          ? `−${e.magnitude}% input`
+                          : e.type === "coin_pct"
+                            ? `+${e.magnitude}% coin`
+                            : e.type === "storage_capacity"
+                              ? `+${e.magnitude} storage`
+                              : `${e.type} ${e.magnitude}`}
+                    </span>
+                  ))}
+                </span>
               </li>
             ))}
           </ul>

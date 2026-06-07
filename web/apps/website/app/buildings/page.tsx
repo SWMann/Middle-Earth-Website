@@ -7,6 +7,7 @@ import {
   getAllBuildingTags,
   getAllBuildingVariantLinks,
   getAllBuildingOutputs,
+  getAllBuildingEffects,
 } from "@/lib/data/catalogue";
 
 export const revalidate = 600;
@@ -21,8 +22,17 @@ const CATEGORY_ORDER = [
   "residential",
   "structural",
   "functional",
+  "support",
   "landmark",
 ];
+
+const EFFECT_LABEL: Record<string, string> = {
+  output_pct: "+output",
+  input_reduction_pct: "input saved",
+  coin_pct: "+coin",
+  upkeep_reduction_pct: "upkeep saved",
+  storage_capacity: "storage",
+};
 
 const HOUSING_CLASS_ORDER = [
   "peasant",
@@ -39,6 +49,8 @@ const CATEGORY_BLURB: Record<string, string> = {
     "The anchor of a district — there is usually exactly one, and it defines the district's identity.",
   functional:
     "Working buildings that supply the components a district needs to operate.",
+  support:
+    "Optional upgrades. Add them to a production district to buff it — more output, less input waste, better margins. Not required, but they make a workshop sing.",
   landmark:
     "Optional prestige structures. They rarely supply components but lift a plot's decoration score and standing.",
 };
@@ -51,7 +63,7 @@ function footprint(min: number | null, max: number | null): string | null {
 }
 
 export default async function BuildingsIndexPage() {
-  const [buildings, components, links, usage, tags, variants, outputs] =
+  const [buildings, components, links, usage, tags, variants, outputs, effects] =
     await Promise.all([
       getAllBuildingTypes(),
       getAllFunctionalComponents(),
@@ -60,7 +72,17 @@ export default async function BuildingsIndexPage() {
       getAllBuildingTags(),
       getAllBuildingVariantLinks(),
       getAllBuildingOutputs(),
+      getAllBuildingEffects(),
     ]);
+
+  const effectsByBuilding = new Map<string, { type: string; magnitude: number }[]>();
+  for (const e of effects) {
+    if (!effectsByBuilding.has(e.buildingTypeId))
+      effectsByBuilding.set(e.buildingTypeId, []);
+    effectsByBuilding
+      .get(e.buildingTypeId)!
+      .push({ type: e.effectType, magnitude: e.magnitude });
+  }
 
   const outputsByBuilding = new Map<
     string,
@@ -177,6 +199,7 @@ export default async function BuildingsIndexPage() {
                 const bTags = tagsByBuilding.get(b.id) ?? [];
                 const bVariants = variantsByBuilding.get(b.id) ?? [];
                 const bOutputs = outputsByBuilding.get(b.id) ?? [];
+                const bEffects = effectsByBuilding.get(b.id) ?? [];
                 const fp = footprint(b.minFootprintBlocks, b.maxFootprintBlocks);
                 return (
                   <li
@@ -216,6 +239,28 @@ export default async function BuildingsIndexPage() {
                       <p className="text-sm opacity-70 mt-1.5">
                         {b.description}
                       </p>
+                    )}
+
+                    {bEffects.length > 0 && (
+                      <div className="mt-2.5">
+                        <span className="text-[10px] uppercase tracking-widest opacity-50 mr-2">
+                          District buff
+                        </span>
+                        <span className="inline-flex flex-wrap gap-1.5 align-middle">
+                          {bEffects.map((e) => (
+                            <span
+                              key={e.type}
+                              className="text-[11px] px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-300"
+                            >
+                              {e.type === "input_reduction_pct"
+                                ? `−${e.magnitude}% input`
+                                : e.type === "storage_capacity"
+                                  ? `+${e.magnitude} ${EFFECT_LABEL[e.type]}`
+                                  : `+${e.magnitude}% ${EFFECT_LABEL[e.type]?.replace("+", "") ?? e.type}`}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
                     )}
 
                     {bOutputs.length > 0 && (

@@ -37,6 +37,7 @@ import {
   buildingTypesCatalogue,
   buildingTagsCatalogue,
   buildingOutputsCatalogue,
+  buildingEffectsCatalogue,
   districtRequiredBuildingsCatalogue,
   districtScaleBonusesCatalogue,
   districtRequiredComponentsCatalogue,
@@ -748,6 +749,10 @@ async function main() {
   for (const bo of buildingOutputsCatalogue) {
     await db.insert(schema.buildingOutputs).values(bo);
   }
+  await db.execute(sqlOp`DELETE FROM config.building_effects`);
+  for (const be of buildingEffectsCatalogue) {
+    await db.insert(schema.buildingEffects).values(be);
+  }
   for (const rb of districtRequiredBuildingsCatalogue) {
     await db.insert(schema.districtRequiredBuildings).values({
       districtTypeId: rb.districtTypeId,
@@ -758,6 +763,7 @@ async function main() {
       themeNote: rb.themeNote,
       themeTag: rb.themeTag ?? null,
       groupKey: rb.groupKey ?? null,
+      optional: rb.optional ?? false,
     });
   }
   for (const rc of districtRequiredComponentsCatalogue) {

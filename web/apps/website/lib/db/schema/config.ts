@@ -532,6 +532,34 @@ export const buildingOutputs = config.table("building_outputs", {
 });
 
 /**
+ * The district-level buff an (optional) support building grants — the
+ * "upgrade your workshop" layer. A Foreman's Office lifts output; a
+ * Materials Store cuts input waste; a Counting Room sweetens the margin.
+ * Effects from all the support buildings on a plot stack.
+ *
+ * effectType (open enum; the mod/planner applies it):
+ *   output_pct           +% to the district's daily production
+ *   input_reduction_pct  −% to the district's input demand
+ *   coin_pct             +% to the district's coin (trade margin)
+ *   upkeep_reduction_pct −% to the district's coin upkeep
+ *   storage_capacity     +N stockpile headroom (informational for now)
+ */
+export const buildingEffects = config.table(
+  "building_effects",
+  {
+    buildingTypeId: text("building_type_id")
+      .notNull()
+      .references(() => buildingTypes.id),
+    effectType: text("effect_type").notNull(),
+    magnitude: integer("magnitude").notNull(),
+    note: text("note").notNull().default(""),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.buildingTypeId, t.effectType] }),
+  }),
+);
+
+/**
  * Free-form tags on a building, used to satisfy 'themed' district
  * requirements verifiably (a row tagged 'theme:bakery' counts toward a
  * district's "2 bakery-themed buildings" slot). Open enum.
@@ -610,6 +638,12 @@ export const districtRequiredBuildings = config.table(
      * be small or large; the scale bonus rewards filling it.
      */
     maxCount: integer("max_count"),
+    /**
+     * When true this is an OPTIONAL slot — buildings a player MAY add to
+     * upgrade the district (a workshop's storehouse, foreman's office,
+     * water-wheel), not a completion requirement. count is the minimum (0).
+     */
+    optional: boolean("optional").notNull().default(false),
     themeNote: text("theme_note"),
     /** For 'themed' rows: the building_tags value that satisfies it. */
     themeTag: text("theme_tag"),
@@ -966,6 +1000,7 @@ export type BuildingType = typeof buildingTypes.$inferSelect;
 export type FunctionalComponent = typeof functionalComponents.$inferSelect;
 export type BuildingTag = typeof buildingTags.$inferSelect;
 export type BuildingOutput = typeof buildingOutputs.$inferSelect;
+export type BuildingEffect = typeof buildingEffects.$inferSelect;
 export type DecorationCriterion = typeof decorationCriteria.$inferSelect;
 export type TierDecorationThreshold = typeof tierDecorationThresholds.$inferSelect;
 export type DistrictScaleBonus = typeof districtScaleBonuses.$inferSelect;

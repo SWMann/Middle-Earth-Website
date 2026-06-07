@@ -693,6 +693,27 @@ export const buildingTypesCatalogue: BuildingSeed[] = [
   { id: "mint_press", displayName: "Mint Press", category: "functional", description: "Dies and a screw-press striking coin from bullion.", provides: ["STORAGE"] },
   { id: "warehouse", displayName: "Warehouse", category: "functional", description: "A great bonded store for goods in transit.", provides: ["STORAGE"], quantities: { STORAGE: 4 }, minFootprintBlocks: 60 },
   { id: "loading_dock", displayName: "Loading Dock", category: "functional", description: "Cranes, weigh-beams, and a carter's yard.", provides: ["STORAGE"] },
+
+  // --- Support / upgrade buildings (optional; buff the district they sit in;
+  //     tagged support:industrial, carry building_effects) ----------------
+  { id: "foremans_office", displayName: "Foreman's Office", category: "support", description: "An overseer's counting-room — keeps every bench at work and the stock moving.", provides: ["TABLE"], tierMin: "burgh", minFootprintBlocks: 20 },
+  { id: "masters_workshop", displayName: "Master's Workshop", category: "support", description: "A master craftsman's bench. The whole yard works to a higher standard.", provides: ["STORAGE"], tierMin: "town", minFootprintBlocks: 30 },
+  { id: "water_wheel", displayName: "Water Wheel", category: "support", description: "A great undershot wheel driving shafts and hammers. Needs running water.", provides: [], minHeightBlocks: 6 },
+  { id: "goods_store", displayName: "Goods Store", category: "support", description: "A dry, bonded store — finished stock kept safe and counted, less lost to spoil.", provides: ["STORAGE"], quantities: { STORAGE: 3 }, minFootprintBlocks: 40 },
+  { id: "materials_store", displayName: "Materials Store", category: "support", description: "Racked and sheltered raw stock, drawn as needed — less waste at the bench.", provides: ["STORAGE"], quantities: { STORAGE: 2 }, minFootprintBlocks: 30 },
+  { id: "counting_room", displayName: "Counting Room", category: "support", description: "Ledgers and a strong-box. Sharp factors fetch a better price for the goods.", provides: ["STORAGE"], tierMin: "town" },
+];
+
+// --- Building effects (district buffs from optional support buildings) ----
+
+export const buildingEffectsCatalogue = [
+  { buildingTypeId: "foremans_office", effectType: "output_pct", magnitude: 10, note: "Kept at the bench by an overseer." },
+  { buildingTypeId: "masters_workshop", effectType: "output_pct", magnitude: 15, note: "Worked to a master's standard." },
+  { buildingTypeId: "water_wheel", effectType: "output_pct", magnitude: 12, note: "Mechanical power drives the works." },
+  { buildingTypeId: "goods_store", effectType: "output_pct", magnitude: 5, note: "Less finished stock lost to spoil." },
+  { buildingTypeId: "goods_store", effectType: "storage_capacity", magnitude: 100, note: "Bonded headroom for stock." },
+  { buildingTypeId: "materials_store", effectType: "input_reduction_pct", magnitude: 20, note: "Banked inputs, less waste." },
+  { buildingTypeId: "counting_room", effectType: "coin_pct", magnitude: 20, note: "A better price for the goods." },
 ];
 
 // --- Building outputs (per-building daily production) ---------------------
@@ -762,6 +783,14 @@ export const buildingTagsCatalogue = [
   { buildingTypeId: "mint_press", tag: "theme:luxury" },
   { buildingTypeId: "warehouse", tag: "theme:mercantile" },
   { buildingTypeId: "loading_dock", tag: "theme:mercantile" },
+  // Support buildings — accepted by any production district's optional
+  // upgrade slot (themeTag support:industrial).
+  { buildingTypeId: "foremans_office", tag: "support:industrial" },
+  { buildingTypeId: "masters_workshop", tag: "support:industrial" },
+  { buildingTypeId: "water_wheel", tag: "support:industrial" },
+  { buildingTypeId: "goods_store", tag: "support:industrial" },
+  { buildingTypeId: "materials_store", tag: "support:industrial" },
+  { buildingTypeId: "counting_room", tag: "support:industrial" },
 ];
 
 // --- District required buildings ------------------------------------------
@@ -778,7 +807,30 @@ export type RequiredBuildingSeed = {
   themeNote: string | null;
   themeTag?: string;
   groupKey?: string;
+  /** Optional upgrade slot — buildings the player MAY add, not required. */
+  optional?: boolean;
 };
+
+// Every output-from-buildings (industrial) district accepts an optional
+// "workshop upgrades" slot: up to 3 support buildings (support:industrial),
+// each buffing the district. Generated to avoid one row per district.
+const UPGRADEABLE_DISTRICTS = [
+  "bakery", "smithy", "foundry", "sawmill", "tannery", "weavers_mill",
+  "brewery", "kiln_yard", "fletcher", "glassworks", "mint", "jeweller",
+  "trade_warehouse",
+];
+const districtUpgradeSlots: RequiredBuildingSeed[] = UPGRADEABLE_DISTRICTS.map(
+  (districtTypeId) => ({
+    districtTypeId,
+    kind: "themed",
+    buildingTypeId: null,
+    count: 0,
+    maxCount: 3,
+    themeNote: "workshop upgrades",
+    themeTag: "support:industrial",
+    optional: true,
+  }),
+);
 
 export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
   { districtTypeId: "wheat_farm", kind: "specific", buildingTypeId: "granary", count: 1, themeNote: null },
@@ -833,6 +885,9 @@ export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
   { districtTypeId: "cloister", kind: "themed", buildingTypeId: null, count: 2, maxCount: 6, themeNote: "scholar housing", themeTag: "theme:residential" },
   { districtTypeId: "noble_estate", kind: "themed", buildingTypeId: null, count: 2, maxCount: 5, themeNote: "housing (manor + servants)", themeTag: "theme:residential" },
   { districtTypeId: "high_quarter", kind: "themed", buildingTypeId: null, count: 3, maxCount: 6, themeNote: "noble housing", themeTag: "theme:residential" },
+
+  // Optional workshop-upgrade slots on every industrial district.
+  ...districtUpgradeSlots,
 ];
 
 // --- District scale bonuses ("build big" reward) -------------------------

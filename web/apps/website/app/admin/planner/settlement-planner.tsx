@@ -12,6 +12,8 @@ import {
   prettyTier,
   primarySlot,
   allowedHousing,
+  allowedUpgrades,
+  optionalSlot,
   computePreview,
   emptyPlan,
 } from "@/lib/planner/compute";
@@ -295,7 +297,13 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
               const dt = dtById.get(inst.districtTypeId);
               if (!dt) return null;
               const slot = primarySlot(catalogue, dt.id);
-              const total = inst.buildings.reduce((s, b) => s + b.count, 0);
+              // Count only primary-slot buildings, not optional upgrades.
+              const upgradeIdSet = new Set(
+                allowedUpgrades(catalogue, dt.id).map((u) => u.id),
+              );
+              const total = inst.buildings
+                .filter((b) => !upgradeIdSet.has(b.buildingTypeId))
+                .reduce((s, b) => s + b.count, 0);
               const housing = dt.capFromHousing
                 ? allowedHousing(catalogue, dt.populationClass)
                 : [];
@@ -354,7 +362,9 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
                     </div>
                   )}
 
-                  {/* Ranged non-residential (production / market / stables) */}
+                  {/* Ranged non-residential (production / market / stables).
+                      Show only the primary-slot building(s), not optional
+                      upgrades (which get their own picker below). */}
                   {!dt.capFromHousing && slot && slot.max > slot.min && (
                     <div className="mt-2">
                       {dt.outputFromBuildings && (
@@ -362,7 +372,14 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
                           Output scales with this building — more = more goods.
                         </p>
                       )}
-                      {inst.buildings.map((b) => (
+                      {inst.buildings
+                        .filter(
+                          (b) =>
+                            !allowedUpgrades(catalogue, dt.id).some(
+                              (u) => u.id === b.buildingTypeId,
+                            ),
+                        )
+                        .map((b) => (
                         <Stepper
                           key={b.buildingTypeId}
                           label={
@@ -382,6 +399,45 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
                       ))}
                     </div>
                   )}
+
+                  {/* Optional workshop upgrades */}
+                  {(() => {
+                    const upgrades = allowedUpgrades(catalogue, dt.id);
+                    if (upgrades.length === 0) return null;
+                    const oslot = optionalSlot(catalogue, dt.id);
+                    const cap = oslot?.maxCount ?? 0;
+                    const used = inst.buildings
+                      .filter((b) => upgrades.some((u) => u.id === b.buildingTypeId))
+                      .reduce((s, b) => s + b.count, 0);
+                    const remaining = cap - used;
+                    return (
+                      <div className="mt-3 border-t border-stone-100 dark:border-stone-900 pt-2">
+                        <p className="text-[11px] uppercase tracking-widest opacity-50 mb-1">
+                          Upgrades{" "}
+                          <span className="opacity-70 tabular-nums">
+                            {used}/{cap}
+                          </span>
+                        </p>
+                        {upgrades.map((u) => {
+                          const cur =
+                            inst.buildings.find((b) => b.buildingTypeId === u.id)
+                              ?.count ?? 0;
+                          return (
+                            <Stepper
+                              key={u.id}
+                              label={u.displayName}
+                              value={cur}
+                              max={cur + remaining}
+                              onChange={(n) => setBuildingCount(inst.uid, u.id, n)}
+                              onLabelClick={() =>
+                                setModal({ type: "building", id: u.id })
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -493,6 +549,17 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
 export type OpenModal = (
   m: { type: "district"; uid: string } | { type: "building"; id: string },
 ) => void;
+
+const EFFECT_LABEL: Record<string, string> = {
+  output_pct: "Output",
+  input_reduction_pct: "Input saved",
+  coin_pct: "Coin / trade",
+  upkeep_reduction_pct: "Upkeep saved",
+  storage_capacity: "Storage",
+};
+function effectLabel(type: string): string {
+  return EFFECT_LABEL[type] ?? type.replace(/_/g, " ");
+}
 
 // ---------- Preview panel ----------
 
@@ -1056,6 +1123,22 @@ function DistrictModal({
         </Block>
       )}
 
+      {(d.upgradeBuff.outputPct > 0 ||
+        d.upgradeBuff.inputRedPct > 0 ||
+        d.upgradeBuff.coinPct > 0) && (
+        <Block title="Workshop upgrades (active)">
+          {d.upgradeBuff.outputPct > 0 && (
+            <Row label="Output" value={`+${d.upgradeBuff.outputPct}%`} />
+          )}
+          {d.upgradeBuff.inputRedPct > 0 && (
+            <Row label="Input saved" value={`−${d.upgradeBuff.inputRedPct}%`} />
+          )}
+          {d.upgradeBuff.coinPct > 0 && (
+            <Row label="Coin / trade" value={`+${d.upgradeBuff.coinPct}%`} />
+          )}
+        </Block>
+      )}
+
       {reqB.length > 0 && (
         <Block title="Required buildings">
           <ul className="text-sm space-y-0.5">
@@ -1119,6 +1202,7 @@ function BuildingModal({
     catalogue.cultures.find((c) => c.id === cid)?.displayName ?? cid;
   const provides = catalogue.provides.filter((p) => p.buildingTypeId === id);
   const outputs = catalogue.buildingOutputs.filter((o) => o.buildingTypeId === id);
+  const effects = catalogue.buildingEffects.filter((e) => e.buildingTypeId === id);
   const resName = (rid: string | null) =>
     rid ? catalogue.resources.find((r) => r.id === rid)?.displayName ?? rid : "coin";
   const tags = catalogue.buildingTags.filter((t) => t.buildingTypeId === id).map((t) => t.tag);
@@ -1142,6 +1226,26 @@ function BuildingModal({
       hrefLabel="Open buildings page"
       onClose={onClose}
     >
+      {effects.length > 0 && (
+        <Block title="District buff (when added)">
+          {effects.map((e) => (
+            <Row
+              key={e.effectType}
+              label={effectLabel(e.effectType)}
+              value={
+                e.effectType === "input_reduction_pct"
+                  ? `−${e.magnitude}%`
+                  : e.effectType === "storage_capacity"
+                    ? `+${e.magnitude}`
+                    : `+${e.magnitude}%`
+              }
+            />
+          ))}
+          <p className="text-[10px] opacity-40 mt-1">
+            An optional upgrade — buffs the production district it sits in.
+          </p>
+        </Block>
+      )}
       {outputs.length > 0 && (
         <Block title="Produces / day (each)">
           {outputs.map((o) => (

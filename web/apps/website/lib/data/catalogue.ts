@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { eq, desc, or } from "drizzle-orm";
+import { eq, desc, or, and } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 
 // --- Resources ------------------------------------------------------------
@@ -464,6 +464,50 @@ export const getBuildingOutputs = cache(async (buildingTypeId: string) => {
     .where(eq(schema.buildingOutputs.buildingTypeId, buildingTypeId));
 });
 
+/** The optional upgrade buildings a district accepts, with their buffs. */
+export const getDistrictUpgradeBuildings = cache(async (districtTypeId: string) => {
+  const [optRow] = await db
+    .select({ themeTag: schema.districtRequiredBuildings.themeTag })
+    .from(schema.districtRequiredBuildings)
+    .where(
+      and(
+        eq(schema.districtRequiredBuildings.districtTypeId, districtTypeId),
+        eq(schema.districtRequiredBuildings.optional, true),
+      ),
+    )
+    .limit(1);
+  if (!optRow?.themeTag) return [];
+  const buildings = await db
+    .select({
+      id: schema.buildingTypes.id,
+      displayName: schema.buildingTypes.displayName,
+    })
+    .from(schema.buildingTags)
+    .innerJoin(schema.buildingTypes, eq(schema.buildingTags.buildingTypeId, schema.buildingTypes.id))
+    .where(eq(schema.buildingTags.tag, optRow.themeTag))
+    .orderBy(schema.buildingTypes.displayName);
+  const effects = await db.select().from(schema.buildingEffects);
+  return buildings.map((b) => ({
+    ...b,
+    effects: effects
+      .filter((e) => e.buildingTypeId === b.id)
+      .map((e) => ({ type: e.effectType, magnitude: e.magnitude })),
+  }));
+});
+
+/** District-level buffs an optional support building grants. */
+export const getBuildingEffects = cache(async (buildingTypeId: string) => {
+  return await db
+    .select()
+    .from(schema.buildingEffects)
+    .where(eq(schema.buildingEffects.buildingTypeId, buildingTypeId));
+});
+
+/** All building effects in one shot, for the buildings index. */
+export const getAllBuildingEffects = cache(async () => {
+  return await db.select().from(schema.buildingEffects);
+});
+
 /** All building outputs in one shot, for the buildings index. */
 export const getAllBuildingOutputs = cache(async () => {
   return await db
@@ -515,6 +559,7 @@ export const getDistrictRequiredBuildings = cache(
         themeNote: schema.districtRequiredBuildings.themeNote,
         themeTag: schema.districtRequiredBuildings.themeTag,
         groupKey: schema.districtRequiredBuildings.groupKey,
+        optional: schema.districtRequiredBuildings.optional,
       })
       .from(schema.districtRequiredBuildings)
       .leftJoin(
