@@ -22,6 +22,8 @@ import type {
   ClaimRegionResponse,
   PlotReviewRequest,
   PlotReviewResponse,
+  SavePlotRequest,
+  SavePlotResponse,
 } from "@modspec/api-types";
 import { MockModApiError, mockRedeemLinkCode } from "./mock";
 
@@ -157,6 +159,23 @@ export async function reviewPlot(
     });
   }
   return await modPost<PlotReviewResponse>(`/plots/${plotId}/review`, req);
+}
+
+/**
+ * Save a floorplanner-authored plot. A pure insert into game.plots (the
+ * website's role is SELECT-only on game.*, so this crosses the bridge).
+ */
+export async function savePlot(req: SavePlotRequest): Promise<SavePlotResponse> {
+  if (shouldMock()) {
+    throw new ModApiError(503, {
+      title: "Bridge mock doesn't implement savePlot",
+      status: 503,
+      detail:
+        "Set MOD_API_URL to the running Andúril bridge and MOD_API_MOCK=0 to use this action. " +
+        `Current env: ${mockDiagnostic()}`,
+    });
+  }
+  return await modPost<SavePlotResponse>(`/plots`, req);
 }
 
 async function modPost<T>(path: string, body: unknown): Promise<T> {

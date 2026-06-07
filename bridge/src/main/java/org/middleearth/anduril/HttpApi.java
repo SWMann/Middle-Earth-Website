@@ -1,5 +1,6 @@
 package org.middleearth.anduril;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.javalin.http.BadRequestResponse;
@@ -520,6 +521,87 @@ public class HttpApi {
             }
         });
 
+        // Protected: save a plot authored in the web floorplanner. A pure
+        // insert into game.plots (source 'floorplanner', review_status
+        // 'unscanned') carrying the image↔block transform + planned layout; the
+        // geometry AABB is computed web-side by the shared lib/plots/geometry.ts
+        // projection, so the bridge stays a thin writer. Phase E scans it later.
+        app.post("/api/v1/plots", ctx -> {
+            SavePlotRequest req = ctx.bodyAsClass(SavePlotRequest.class);
+            validateSavePlot(req);
+
+            try (Connection conn = database.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    long plotId;
+                    try (PreparedStatement ins = conn.prepareStatement(
+                            "INSERT INTO game.plots (" +
+                            "settlement_id, district_id, district_type, faction_id, source, label, " +
+                            "min_x, min_y, min_z, max_x, max_y, max_z, " +
+                            "footprint_cells, transform, layout, review_status, updated_at) " +
+                            "VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
+                            "CAST(? AS jsonb), CAST(? AS jsonb), CAST(? AS jsonb), 'unscanned', NOW()) " +
+                            "RETURNING id")) {
+                        setNullableLong(ins, 1, req.settlementId());
+                        ins.setString(2, req.districtType());
+                        ins.setString(3, req.factionId());
+                        ins.setString(4, req.source() == null || req.source().isBlank() ? "floorplanner" : req.source());
+                        ins.setString(5, req.label() == null ? "" : req.label());
+                        ins.setInt(6, req.minX());
+                        ins.setInt(7, req.minY());
+                        ins.setInt(8, req.minZ());
+                        ins.setInt(9, req.maxX());
+                        ins.setInt(10, req.maxY());
+                        ins.setInt(11, req.maxZ());
+                        ins.setString(12, nodeToJson(req.footprintCells()));
+                        ins.setString(13, nodeToJson(req.transform()));
+                        ins.setString(14, nodeToJson(req.layout()));
+                        try (ResultSet rs = ins.executeQuery()) {
+                            rs.next();
+                            plotId = rs.getLong(1);
+                        }
+                    }
+
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("plot_id", plotId);
+                    payload.put("district_type", req.districtType());
+                    payload.put("faction_id", req.factionId());
+                    payload.put("settlement_id", req.settlementId());
+                    payload.put("source", "floorplanner");
+                    payload.put("box", Map.of(
+                        "min", new int[]{req.minX(), req.minY(), req.minZ()},
+                        "max", new int[]{req.maxX(), req.maxY(), req.maxZ()}));
+
+                    long eventId;
+                    try (PreparedStatement insert = conn.prepareStatement(
+                            "INSERT INTO audit.events " +
+                            "(event_type, faction_id, visibility, payload, occurred_at) " +
+                            "VALUES (?, ?, ?, CAST(? AS jsonb), NOW()) RETURNING id")) {
+                        insert.setString(1, "PLOT_SAVED");
+                        insert.setString(2, req.factionId());
+                        insert.setString(3, "admin");
+                        insert.setString(4, JSON.writeValueAsString(payload));
+                        try (ResultSet rs = insert.executeQuery()) {
+                            rs.next();
+                            eventId = rs.getLong(1);
+                        }
+                    }
+
+                    conn.commit();
+                    Anduril.LOGGER.info(
+                        "PLOT_SAVED: plot #{} ({} floorplan, event {})",
+                        plotId, req.districtType(), eventId);
+                    ctx.json(new SavePlotResponse(plotId, eventId));
+                } catch (Exception e) {
+                    conn.rollback();
+                    throw e;
+                }
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("DB error during plot save: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
+        });
+
         // Protected: staff approve/reject a scanned plot. The companion to the
         // in-game scanner (scan/ package): a plot that didn't auto-approve sits
         // pending in the website's review queue until a reviewer decides here.
@@ -705,6 +787,27 @@ public class HttpApi {
         }
     }
 
+    private static String nodeToJson(JsonNode node) {
+        return (node == null || node.isNull()) ? null : node.toString();
+    }
+
+    private static void setNullableLong(PreparedStatement ps, int idx, Long v) throws SQLException {
+        if (v == null) ps.setNull(idx, java.sql.Types.BIGINT);
+        else ps.setLong(idx, v);
+    }
+
+    private static void validateSavePlot(SavePlotRequest req) {
+        if (req == null) {
+            throw new BadRequestResponse("Body required");
+        }
+        if (req.districtType() == null || !req.districtType().matches("[a-z0-9_]{2,64}")) {
+            throw new BadRequestResponse("districtType must match [a-z0-9_]{2,64}");
+        }
+        if (req.minX() > req.maxX() || req.minY() > req.maxY() || req.minZ() > req.maxZ()) {
+            throw new BadRequestResponse("min coords must be ≤ max coords on every axis");
+        }
+    }
+
     private static void validateReview(PlotReviewRequest req) {
         if (req == null) {
             throw new BadRequestResponse("Body required");
@@ -758,6 +861,26 @@ public class HttpApi {
         long treasuryDp,
         long auditEventId
     ) {}
+
+    /**
+     * Request body for POST /api/v1/plots (web floorplanner save). The
+     * geometry AABB is computed web-side; the jsonb blobs are stored verbatim.
+     */
+    public record SavePlotRequest(
+        String districtType,
+        String factionId,
+        Long settlementId,
+        String label,
+        String source,
+        int minX, int minY, int minZ,
+        int maxX, int maxY, int maxZ,
+        JsonNode footprintCells,
+        JsonNode transform,
+        JsonNode layout
+    ) {}
+
+    /** Response body — the new plot id and the audit row id. */
+    public record SavePlotResponse(long plotId, long auditEventId) {}
 
     /** Request body for POST /api/v1/plots/{id}/review. */
     public record PlotReviewRequest(String decision, String reviewedBy, String note) {}

@@ -27,3 +27,34 @@ export type PlotReviewResponse = {
   districtId: number | null;
   auditEventId: number;
 };
+
+/**
+ * Save a plot authored in the web floorplanner. The geometry AABB is computed
+ * web-side via lib/plots/geometry.ts; the transform + layout + footprint cells
+ * are stored verbatim as jsonb. review_status starts 'unscanned' — Phase E
+ * (or an in-game scan) fills the score/validation later.
+ */
+export type SavePlotRequest = {
+  districtType: string;
+  factionId: string | null;
+  settlementId: number | null;
+  label: string;
+  source: string;
+  minX: number;
+  minY: number;
+  minZ: number;
+  maxX: number;
+  maxY: number;
+  maxZ: number;
+  /** Plot outline in world block columns (grid-cell footprint expanded). */
+  footprintCells: [number, number][];
+  /** The image/grid↔block transform (PlotTransform). */
+  transform: Record<string, unknown>;
+  /** The planned building layout (PlotLayout). */
+  layout: Record<string, unknown>;
+};
+
+export type SavePlotResponse = {
+  plotId: number;
+  auditEventId: number;
+};

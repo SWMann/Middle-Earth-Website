@@ -23,6 +23,13 @@ export default function AdminPage() {
         — approve or reject in-game builds the Andúril scanner flagged for a
         human look.
       </p>
+      <p>
+        <Link href={{ pathname: "/admin/floorplan" }} className="underline">
+          Plot Floorplanner
+        </Link>{" "}
+        — sketch a plot&apos;s footprint and buildings on a grid mapped to world
+        block coordinates, then save it for scanning.
+      </p>
     </ComingSoon>
   );
 }
