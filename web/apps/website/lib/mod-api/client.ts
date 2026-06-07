@@ -20,6 +20,8 @@ import type {
   RecruitUnitsResponse,
   ClaimRegionRequest,
   ClaimRegionResponse,
+  PlotReviewRequest,
+  PlotReviewResponse,
 } from "@modspec/api-types";
 import { MockModApiError, mockRedeemLinkCode } from "./mock";
 
@@ -133,6 +135,28 @@ export async function claimRegion(
     });
   }
   return await modPost<ClaimRegionResponse>(`/claims`, req);
+}
+
+/**
+ * Approve or reject a scanned plot. The bridge updates game.plots (and
+ * activates a linked district on approval). Always goes through the real
+ * bridge — the website's DB role is SELECT-only on game.*, so the write
+ * must cross the bridge.
+ */
+export async function reviewPlot(
+  plotId: number,
+  req: PlotReviewRequest,
+): Promise<PlotReviewResponse> {
+  if (shouldMock()) {
+    throw new ModApiError(503, {
+      title: "Bridge mock doesn't implement reviewPlot",
+      status: 503,
+      detail:
+        "Set MOD_API_URL to the running Andúril bridge and MOD_API_MOCK=0 to use this action. " +
+        `Current env: ${mockDiagnostic()}`,
+    });
+  }
+  return await modPost<PlotReviewResponse>(`/plots/${plotId}/review`, req);
 }
 
 async function modPost<T>(path: string, body: unknown): Promise<T> {

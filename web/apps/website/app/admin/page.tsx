@@ -16,6 +16,13 @@ export default function AdminPage() {
         — plan a settlement for any faction and tier and preview its economy
         and systems live.
       </p>
+      <p>
+        <Link href={{ pathname: "/admin/reviews" }} className="underline">
+          Build Reviews
+        </Link>{" "}
+        — approve or reject in-game builds the Andúril scanner flagged for a
+        human look.
+      </p>
     </ComingSoon>
   );
 }

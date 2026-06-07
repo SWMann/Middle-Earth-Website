@@ -14,3 +14,4 @@ export * from "./common";
 export * from "./factions";
 export * from "./settlements";
 export * from "./claims";
+export * from "./plots";

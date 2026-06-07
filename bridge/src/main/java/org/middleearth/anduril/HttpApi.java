@@ -520,6 +520,109 @@ public class HttpApi {
             }
         });
 
+        // Protected: staff approve/reject a scanned plot. The companion to the
+        // in-game scanner (scan/ package): a plot that didn't auto-approve sits
+        // pending in the website's review queue until a reviewer decides here.
+        //   approve → review_status 'approved' (+ activate a linked district)
+        //   reject  → review_status 'rejected'
+        // Only pending plots may be reviewed; anything else is a 409.
+        app.post("/api/v1/plots/{id}/review", ctx -> {
+            long plotId = parseLongOr400(ctx.pathParam("id"));
+            PlotReviewRequest req = ctx.bodyAsClass(PlotReviewRequest.class);
+            validateReview(req);
+            boolean approve = "approve".equalsIgnoreCase(req.decision());
+            String newStatus = approve ? "approved" : "rejected";
+
+            try (Connection conn = database.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    String currentStatus, factionId, districtType;
+                    Long districtId;
+                    int score;
+                    try (PreparedStatement select = conn.prepareStatement(
+                            "SELECT review_status, faction_id, district_id, district_type, " +
+                            "COALESCE(decoration_score, 0) AS score " +
+                            "FROM game.plots WHERE id = ? FOR UPDATE")) {
+                        select.setLong(1, plotId);
+                        try (ResultSet rs = select.executeQuery()) {
+                            if (!rs.next()) {
+                                throw new NotFoundResponse("Plot not found: " + plotId);
+                            }
+                            currentStatus = rs.getString("review_status");
+                            factionId = rs.getString("faction_id");
+                            long d = rs.getLong("district_id");
+                            districtId = rs.wasNull() ? null : d;
+                            districtType = rs.getString("district_type");
+                            score = rs.getInt("score");
+                        }
+                    }
+
+                    if (!"pending_spot".equals(currentStatus) && !"pending_full".equals(currentStatus)) {
+                        ctx.status(409).result(
+                            "Plot " + plotId + " is not pending review (status: " + currentStatus + ")");
+                        return;
+                    }
+
+                    try (PreparedStatement update = conn.prepareStatement(
+                            "UPDATE game.plots SET review_status = ?, review_note = ?, " +
+                            "reviewed_by = ?, updated_at = NOW() WHERE id = ?")) {
+                        update.setString(1, newStatus);
+                        update.setString(2, req.note() == null ? "" : req.note());
+                        update.setString(3, req.reviewedBy());
+                        update.setLong(4, plotId);
+                        update.executeUpdate();
+                    }
+
+                    if (approve && districtId != null) {
+                        try (PreparedStatement update = conn.prepareStatement(
+                                "UPDATE game.districts SET active = 'true' WHERE id = ?")) {
+                            update.setLong(1, districtId);
+                            update.executeUpdate();
+                        }
+                    }
+
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("plot_id", plotId);
+                    payload.put("decision", approve ? "approve" : "reject");
+                    payload.put("from_status", currentStatus);
+                    payload.put("to_status", newStatus);
+                    payload.put("district_type", districtType);
+                    payload.put("district_id", districtId);
+                    payload.put("decoration_score", score);
+                    payload.put("reviewed_by", req.reviewedBy());
+                    payload.put("note", req.note());
+
+                    long eventId;
+                    try (PreparedStatement insert = conn.prepareStatement(
+                            "INSERT INTO audit.events " +
+                            "(event_type, faction_id, visibility, payload, occurred_at) " +
+                            "VALUES (?, ?, ?, CAST(? AS jsonb), NOW()) RETURNING id")) {
+                        insert.setString(1, "PLOT_REVIEWED");
+                        insert.setString(2, factionId);
+                        insert.setString(3, "admin");
+                        insert.setString(4, JSON.writeValueAsString(payload));
+                        try (ResultSet rs = insert.executeQuery()) {
+                            rs.next();
+                            eventId = rs.getLong(1);
+                        }
+                    }
+
+                    conn.commit();
+                    Anduril.LOGGER.info(
+                        "PLOT_REVIEWED: plot #{} {} → {} by {} (event {})",
+                        plotId, currentStatus, newStatus, req.reviewedBy(), eventId);
+
+                    ctx.json(new PlotReviewResponse(plotId, newStatus, districtId, eventId));
+                } catch (Exception e) {
+                    conn.rollback();
+                    throw e;
+                }
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("DB error during plot review: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
+        });
+
         // Protected: Postgres connectivity status. Useful for ops to confirm
         // the bridge has DB without needing to read server logs.
         app.get("/api/v1/admin/db-info", ctx -> {
@@ -602,6 +705,19 @@ public class HttpApi {
         }
     }
 
+    private static void validateReview(PlotReviewRequest req) {
+        if (req == null) {
+            throw new BadRequestResponse("Body required");
+        }
+        if (req.decision() == null
+            || (!"approve".equalsIgnoreCase(req.decision()) && !"reject".equalsIgnoreCase(req.decision()))) {
+            throw new BadRequestResponse("decision must be 'approve' or 'reject'");
+        }
+        if (req.reviewedBy() == null || req.reviewedBy().isBlank()) {
+            throw new BadRequestResponse("reviewedBy is required");
+        }
+    }
+
     private static void validateGrant(GrantRequest req) {
         if (req == null) {
             throw new BadRequestResponse("Body required");
@@ -640,6 +756,17 @@ public class HttpApi {
         String factionId,
         String factionDisplayName,
         long treasuryDp,
+        long auditEventId
+    ) {}
+
+    /** Request body for POST /api/v1/plots/{id}/review. */
+    public record PlotReviewRequest(String decision, String reviewedBy, String note) {}
+
+    /** Response body — the plot's new status and the audit row id. */
+    public record PlotReviewResponse(
+        long plotId,
+        String reviewStatus,
+        Long districtId,
         long auditEventId
     ) {}
 
