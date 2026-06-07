@@ -622,6 +622,7 @@ async function main() {
       mandatoryAtTier: d.mandatoryAtTier ?? null,
       upgradesFrom: d.upgradesFrom ?? null,
       capFromHousing: d.capFromHousing ?? false,
+      populationClass: d.populationClass ?? null,
       metadata: d.metadata ?? {},
     };
     await db
@@ -648,6 +649,7 @@ async function main() {
           mandatoryAtTier: row.mandatoryAtTier,
           upgradesFrom: row.upgradesFrom,
           capFromHousing: row.capFromHousing,
+          populationClass: row.populationClass,
           metadata: row.metadata,
         },
       });
@@ -686,11 +688,12 @@ async function main() {
   await db.execute(sqlOp`DELETE FROM config.building_provides_components`);
   await db.execute(sqlOp`DELETE FROM config.building_tags`);
 
-  // Housing rework: the old single-building residential DISTRICTS (hovel/
-  // cottage/house/manor) are now BUILDINGS instead. Drop the stale district
-  // rows — their child requirements were just wiped above, so no FK blocks.
+  // Housing rework: retired residential DISTRICT ids. The old single-building
+  // ones (hovel/cottage/house/manor) became buildings; the first-pass quarters
+  // (town_quarter/tenement_block/merchant_row) were reorganised by class.
+  // Drop the stale rows — their child requirements were just wiped above.
   await db.execute(
-    sqlOp`DELETE FROM config.district_types WHERE id IN ('hovel', 'cottage', 'house', 'manor')`,
+    sqlOp`DELETE FROM config.district_types WHERE id IN ('hovel', 'cottage', 'house', 'manor', 'town_quarter', 'tenement_block', 'merchant_row')`,
   );
 
   for (const fc of functionalComponentsCatalogue) {
@@ -713,6 +716,7 @@ async function main() {
       minHeightBlocks: b.minHeightBlocks ?? null,
       upgradesFrom: b.upgradesFrom ?? null,
       level: b.level ?? 1,
+      housingClass: b.housingClass ?? null,
     };
     await db
       .insert(schema.buildingTypes)
@@ -724,6 +728,13 @@ async function main() {
         componentId: comp,
         quantity: b.quantities?.[comp] ?? 1,
       });
+    }
+    // Every housing building is theme:residential, so it satisfies a
+    // quarter's housing slot without being listed in buildingTagsCatalogue.
+    if (b.category === "residential") {
+      await db
+        .insert(schema.buildingTags)
+        .values({ buildingTypeId: b.id, tag: "theme:residential" });
     }
   }
   for (const bt of buildingTagsCatalogue) {

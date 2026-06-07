@@ -19,6 +19,7 @@ import {
   getDistrictRequiredBuildings,
   getDistrictRequiredComponents,
   getTierDecorationThresholds,
+  getAllOccupationClasses,
 } from "@/lib/data/catalogue";
 import { getFaction } from "@/lib/data/factions";
 import { FactionTag } from "@/components/tags/faction-tag";
@@ -64,6 +65,7 @@ export default async function DistrictDetailPage({
     reqBuildings,
     reqComponents,
     tierThresholds,
+    occupationClasses,
   ] = await Promise.all([
     getDistrictConsumes(district.id),
     getDistrictProduces(district.id),
@@ -80,6 +82,7 @@ export default async function DistrictDetailPage({
     getDistrictRequiredBuildings(district.id),
     getDistrictRequiredComponents(district.id),
     getTierDecorationThresholds(),
+    getAllOccupationClasses(),
   ]);
 
   const decoThreshold =
@@ -162,12 +165,42 @@ export default async function DistrictDetailPage({
                 : district.populationCapProvided.toString()
             }
           />
+          {district.populationClass && (
+            <Stat
+              label="Houses"
+              value={
+                occupationClasses.find((c) => c.id === district.populationClass)
+                  ?.displayName ?? prettyTerm(district.populationClass)
+              }
+            />
+          )}
         </dl>
         {district.capFromHousing && (
           <p className="mt-3 text-xs opacity-60 max-w-xl">
             This is a residential quarter — its population cap is the total of
             the beds in the housing buildings you raise inside it, not a fixed
             number.
+            {district.populationClass &&
+              ` It is a ${
+                occupationClasses.find((c) => c.id === district.populationClass)
+                  ?.displayName ?? district.populationClass
+              } quarter${
+                lesserClasses(district.populationClass).length > 0
+                  ? `: it accepts ${
+                      occupationClasses.find(
+                        (c) => c.id === district.populationClass,
+                      )?.displayName ?? district.populationClass
+                    } housing or any lower-standing class (${lesserClasses(
+                      district.populationClass,
+                    )
+                      .map(
+                        (id) =>
+                          occupationClasses.find((c) => c.id === id)
+                            ?.displayName ?? id,
+                      )
+                      .join(", ")}) — a higher-class home can't be built here.`
+                  : " — the lowest class, so only its own housing fits."
+              } The population produced follows the mix of housing actually built.`}
           </p>
         )}
       </section>
@@ -896,6 +929,15 @@ function prettyTerm(s: string): string {
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+// Social standing order for housing class ceiling (by social_weight):
+// a quarter accepts its own class and any lower-standing one.
+const CLASS_ORDER = ["peasant", "artisan", "merchant", "scholar", "noble"];
+
+function lesserClasses(classId: string): string[] {
+  const i = CLASS_ORDER.indexOf(classId);
+  return i <= 0 ? [] : CLASS_ORDER.slice(0, i);
 }
 
 function footprintRange(

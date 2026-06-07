@@ -568,6 +568,13 @@ export const getTierDecorationThresholds = cache(async () => {
 
 // --- Cultures & building variants ----------------------------------------
 
+export const getAllOccupationClasses = cache(async () => {
+  return await db
+    .select()
+    .from(schema.occupationClasses)
+    .orderBy(schema.occupationClasses.id);
+});
+
 export const getAllCultures = cache(async () => {
   return await db
     .select()

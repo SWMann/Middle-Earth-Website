@@ -137,6 +137,15 @@ export const districtTypes = config.table("district_types", {
    * ignored and the mod computes cap from the BED components on the plot.
    */
   capFromHousing: boolean("cap_from_housing").notNull().default(false),
+  /**
+   * For residential districts: the occupation class this quarter is FOR
+   * (config.occupation_classes.id). It is the CEILING — the quarter accepts
+   * housing of this class or any lower-standing one (a Noble Estate may hold
+   * servant cottages; a manor can't drop into a peasant quarter). The
+   * population produced follows the actual mix of housing built. NULL for
+   * non-residential districts.
+   */
+  populationClass: text("population_class"),
 
   /** Catch-all for anything not worth a column (wall stats, etc). */
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
@@ -480,6 +489,14 @@ export const buildingTypes = config.table("building_types", {
   upgradesFrom: text("upgrades_from"),
   /** Tier in its own upgrade chain. 1 = base. */
   level: integer("level").notNull().default(1),
+
+  /**
+   * For housing buildings: the occupation class it shelters
+   * (config.occupation_classes.id). A residential quarter accepts housing
+   * whose class is at or below the quarter's own class (the ceiling). NULL
+   * for non-residential buildings.
+   */
+  housingClass: text("housing_class"),
 
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
 });

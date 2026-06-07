@@ -23,9 +23,17 @@ const CATEGORY_ORDER = [
   "landmark",
 ];
 
+const HOUSING_CLASS_ORDER = [
+  "peasant",
+  "artisan",
+  "merchant",
+  "scholar",
+  "noble",
+];
+
 const CATEGORY_BLURB: Record<string, string> = {
   residential:
-    "Housing. Each provides beds in quantity — a residential quarter's population cap is the sum of the beds inside it. Fill a quarter with whatever housing (and culture variants) you like.",
+    "Housing. Each provides beds in quantity (the quarter's population cap is the sum of the beds inside) and carries a class. A quarter accepts housing of its own class or any lower-standing one — peasant < artisan < merchant < scholar < noble — so a manor can't drop into a peasant quarter, but a noble estate may include servant cottages.",
   structural:
     "The anchor of a district — there is usually exactly one, and it defines the district's identity.",
   functional:
@@ -126,7 +134,16 @@ export default async function BuildingsIndexPage() {
       </header>
 
       {orderedCategories.map((category) => {
-        const list = byCategory.get(category) ?? [];
+        const list = [...(byCategory.get(category) ?? [])];
+        // Housing reads best grouped by class (peasant → noble).
+        if (category === "residential") {
+          list.sort((a, b) => {
+            const ai = HOUSING_CLASS_ORDER.indexOf(a.housingClass ?? "");
+            const bi = HOUSING_CLASS_ORDER.indexOf(b.housingClass ?? "");
+            if (ai !== bi) return ai - bi;
+            return a.displayName.localeCompare(b.displayName);
+          });
+        }
         return (
           <section key={category}>
             <h2 className="text-sm uppercase tracking-widest opacity-60 mb-1">
@@ -157,6 +174,11 @@ export default async function BuildingsIndexPage() {
                       <span className="font-mono text-xs text-stone-500">
                         {b.id}
                       </span>
+                      {b.housingClass && (
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
+                          {b.housingClass} class
+                        </span>
+                      )}
                       {b.level > 1 && (
                         <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">
                           tier {b.level}

@@ -96,56 +96,94 @@ export type DistrictSeed = {
   upgradesFrom?: string;
   /** Residential quarters: cap = beds in the housing buildings raised inside. */
   capFromHousing?: boolean;
+  /** Residential quarters: the occupation class ceiling (and identity). */
+  populationClass?: string;
   metadata?: Record<string, unknown>;
 };
 
 export const districtTypesCatalogue: DistrictSeed[] = [
-  // ----- Residential quarters --------------------------------------------
+  // ----- Residential quarters (by population class) ----------------------
   // A residential district is a CLUSTER of housing buildings (see the house
   // family in buildingTypesCatalogue). Its population cap is the sum of the
-  // beds inside, not a fixed number (capFromHousing). Players fill a quarter
-  // with whatever housing buildings — and culture variants — they like, so
-  // long as they meet the count and footprint. Different quarter types serve
-  // different use-cases (density, wealth, culture).
+  // beds inside (capFromHousing). populationClass is the quarter's CLASS
+  // CEILING and identity: it accepts housing of that class or any lower-
+  // standing one (a Noble Estate may include servant cottages; a Manor can't
+  // drop into a peasant quarter). The population produced follows the actual
+  // mix of housing the player raises. Several quarters per class.
+
+  // Peasant — the broad base; hamlet → city coverage.
   {
     id: "crofters_holding", displayName: "Crofters' Holding", category: "residential", tierMin: "hamlet",
-    capFromHousing: true, buildCoinCost: 0, buildTimeDays: 0,
-    description: "Scattered turf-roofed homesteads worked by smallholders. Low, spread-out, and rough — the first housing a hamlet ever raises.",
+    capFromHousing: true, populationClass: "peasant", buildCoinCost: 0, buildTimeDays: 0,
+    description: "Scattered turf-roofed homesteads worked by smallholders. The first housing a hamlet ever raises.",
   },
   {
     id: "cottage_quarter", displayName: "Cottage Quarter", category: "residential", tierMin: "village",
-    capFromHousing: true, buildCoinCost: 20, buildTimeDays: 1,
-    description: "A lane of timber-framed cottages with hearths and kitchen-gardens. The common housing of a village or growing burgh.",
+    capFromHousing: true, populationClass: "peasant", buildCoinCost: 20, buildTimeDays: 1,
+    description: "A lane of timber-framed cottages with hearths and kitchen-gardens. The common housing of a village.",
+  },
+  {
+    id: "fishing_village", displayName: "Fishing Village", category: "residential", tierMin: "village",
+    capFromHousing: true, populationClass: "peasant", terrainRequirement: "coastal", buildCoinCost: 20, buildTimeDays: 1,
+    description: "Net-lofts and fishers' huts along a strand or quay. Coastal tiles only — the sea is the larder.",
   },
   {
     id: "longhouse_steading", displayName: "Longhouse Steading", category: "residential", tierMin: "village",
-    capFromHousing: true, buildCoinCost: 30, buildTimeDays: 2,
+    capFromHousing: true, populationClass: "peasant", buildCoinCost: 30, buildTimeDays: 2,
     description: "Communal halls where whole kin-groups live under one ridge. The way of the Northmen, the Rohirrim, and the hill-folk.",
   },
   {
+    id: "common_quarter", displayName: "Common Quarter", category: "residential", tierMin: "city",
+    capFromHousing: true, populationClass: "peasant", buildCoinCost: 80, buildTimeDays: 3,
+    description: "Stacked tenements and crowded lanes housing a city's labouring multitude in the least ground.",
+  },
+
+  // Artisan — the working town.
+  {
     id: "artisans_quarter", displayName: "Artisans' Quarter", category: "residential", tierMin: "burgh",
-    capFromHousing: true, buildCoinCost: 60, buildTimeDays: 2,
-    description: "Workshop-houses where the craft is plied downstairs and the family sleeps above. Sited cheek-by-jowl with the trade district it serves.",
+    capFromHousing: true, populationClass: "artisan", buildCoinCost: 60, buildTimeDays: 2,
+    description: "Workshop-houses where the craft is plied downstairs and the family sleeps above. Sited beside the trades it serves.",
   },
   {
-    id: "town_quarter", displayName: "Town Quarter", category: "residential", tierMin: "town",
-    capFromHousing: true, buildCoinCost: 80, buildTimeDays: 3,
-    description: "Dense streets of houses and tall town-houses sharing a public well. The backbone of a proper town.",
+    id: "craft_lane", displayName: "Craft Lane", category: "residential", tierMin: "town",
+    capFromHousing: true, populationClass: "artisan", buildCoinCost: 100, buildTimeDays: 3,
+    description: "A denser street of guild-lodgings and craft-houses — looms, benches, and forges behind every shutter.",
+  },
+
+  // Merchant — the wealthy frontages.
+  {
+    id: "merchants_row", displayName: "Merchants' Row", category: "residential", tierMin: "town",
+    capFromHousing: true, populationClass: "merchant", buildCoinCost: 120, buildTimeDays: 3,
+    description: "Fine town-houses for the well-to-do — counting-rooms below, comfortable lodgings above.",
   },
   {
-    id: "merchant_row", displayName: "Merchants' Row", category: "residential", tierMin: "town",
-    capFromHousing: true, buildCoinCost: 120, buildTimeDays: 3,
-    description: "A frontage of fine town-houses for the well-to-do — counting-rooms below, comfortable lodgings above.",
+    id: "counting_quarter", displayName: "Counting Quarter", category: "residential", tierMin: "city",
+    capFromHousing: true, populationClass: "merchant", buildCoinCost: 180, buildTimeDays: 4,
+    description: "The merchant heart of a city — counting-houses and warehouse-lofts where the great trading families live above their ledgers.",
+  },
+
+  // Scholar — the lettered precincts.
+  {
+    id: "scholars_close", displayName: "Scholars' Close", category: "residential", tierMin: "town",
+    capFromHousing: true, populationClass: "scholar", buildCoinCost: 120, buildTimeDays: 3,
+    description: "Quiet lodgings for scribes, healers, and lore-keepers, set close by the library they serve.",
   },
   {
-    id: "tenement_block", displayName: "Tenement Block", category: "residential", tierMin: "city",
-    capFromHousing: true, buildCoinCost: 100, buildTimeDays: 3,
-    description: "Stacked vertical housing wringing the most beds from the least ground. How a city shelters its multitudes.",
+    id: "cloister", displayName: "Cloister", category: "residential", tierMin: "city",
+    capFromHousing: true, populationClass: "scholar", buildCoinCost: 220, buildTimeDays: 5, maxPerSettlement: 2,
+    description: "A walled precinct of study-cells around a quiet court. Houses an order of scholars and clerics.",
   },
+
+  // Noble — few, but high.
   {
     id: "noble_estate", displayName: "Noble Estate", category: "residential", tierMin: "city",
-    capFromHousing: true, buildCoinCost: 300, buildTimeDays: 5, upkeepCoinDaily: 2, maxPerSettlement: 2,
-    description: "A walled manor and its grounds — servants' quarters, stables, and a hall. Houses few, but seats the powerful.",
+    capFromHousing: true, populationClass: "noble", buildCoinCost: 300, buildTimeDays: 5, upkeepCoinDaily: 2, maxPerSettlement: 2,
+    description: "A walled manor and its grounds — hall, stables, and servants' cottages. Houses few, but seats the powerful.",
+  },
+  {
+    id: "high_quarter", displayName: "High Quarter", category: "residential", tierMin: "city",
+    capFromHousing: true, populationClass: "noble", buildCoinCost: 260, buildTimeDays: 4, upkeepCoinDaily: 1, maxPerSettlement: 1,
+    description: "The aristocratic district of a great city — town-manors and villas crowded behind their own gate.",
   },
 
   // ----- Agricultural -----
@@ -471,22 +509,51 @@ export type BuildingSeed = {
   minHeightBlocks?: number;
   upgradesFrom?: string;
   level?: number;
+  /** For housing: the occupation class this building shelters. */
+  housingClass?: string;
 };
 
 export const buildingTypesCatalogue: BuildingSeed[] = [
-  // --- Housing (the residential building family; tagged theme:residential).
-  // Each provides BED in quantity — the bed count is what a residential
-  // quarter's population cap is summed from. Upgrade chain: hovel → cottage
-  // → house → manor-house. Town-house, tenement and longhouse are parallel
-  // forms for dense-urban and communal settings. Culture variants reskin
-  // these (a Hobbit smial, a Rohirric cot, …).
-  { id: "hovel", displayName: "Hovel", category: "residential", description: "A turf-and-wattle one-room dwelling. The smallest legitimate housing.", provides: ["BED"], quantities: { BED: 2 }, tierMin: "hamlet", minFootprintBlocks: 16, maxFootprintBlocks: 49, minHeightBlocks: 3, level: 1 },
-  { id: "cottage", displayName: "Cottage", category: "residential", description: "A timber-framed home with a hearth and a kitchen-garden.", provides: ["BED", "HEARTH"], quantities: { BED: 4 }, tierMin: "village", minFootprintBlocks: 36, maxFootprintBlocks: 100, minHeightBlocks: 4, upgradesFrom: "hovel", level: 2 },
-  { id: "house", displayName: "House", category: "residential", description: "A proper two-storey home with outbuildings — the mark of a settled burgher.", provides: ["BED", "HEARTH"], quantities: { BED: 6 }, tierMin: "burgh", minFootprintBlocks: 64, maxFootprintBlocks: 200, minHeightBlocks: 6, upgradesFrom: "cottage", level: 3 },
-  { id: "townhouse", displayName: "Town House", category: "residential", description: "A narrow, tall row-house that wrings many beds from a small frontage.", provides: ["BED", "HEARTH"], quantities: { BED: 6 }, tierMin: "town", minFootprintBlocks: 36, maxFootprintBlocks: 110, minHeightBlocks: 9 },
-  { id: "manor_house", displayName: "Manor House", category: "residential", description: "A walled hall with servants' quarters — houses the well-to-do and their household.", provides: ["BED", "HEARTH", "TABLE"], quantities: { BED: 10, HEARTH: 2 }, tierMin: "town", minFootprintBlocks: 150, maxFootprintBlocks: 400, minHeightBlocks: 8, upgradesFrom: "house", level: 4 },
-  { id: "tenement", displayName: "Tenement", category: "residential", description: "Stacked dwellings sharing stair and yard — the city's densest housing.", provides: ["BED"], quantities: { BED: 12 }, tierMin: "city", minFootprintBlocks: 80, maxFootprintBlocks: 200, minHeightBlocks: 12 },
-  { id: "longhouse", displayName: "Longhouse", category: "residential", description: "A communal hall where a whole kin-group lives under one ridge.", provides: ["BED", "HEARTH", "TABLE"], quantities: { BED: 10, HEARTH: 2 }, tierMin: "village", minFootprintBlocks: 80, maxFootprintBlocks: 220, minHeightBlocks: 6 },
+  // --- Housing (the residential building family) -------------------------
+  // Each provides BED in quantity — a residential quarter's population cap
+  // is the sum of the beds inside it. Every housing building carries a
+  // housingClass; a quarter accepts housing of its own class or any lower-
+  // standing one (peasant < artisan < merchant < scholar < noble). All are
+  // tagged theme:residential so they satisfy a quarter's housing slot.
+  // Culture variants reskin them (a Hobbit smial, a Rohirric cot, …).
+
+  // Peasant — the broad base. Cheap, small, and the most options.
+  { id: "hovel", displayName: "Hovel", category: "residential", housingClass: "peasant", description: "A turf-and-wattle one-room dwelling. The smallest legitimate housing.", provides: ["BED"], quantities: { BED: 2 }, tierMin: "hamlet", minFootprintBlocks: 16, maxFootprintBlocks: 49, minHeightBlocks: 3, level: 1 },
+  { id: "cottage", displayName: "Cottage", category: "residential", housingClass: "peasant", description: "A timber-framed home with a hearth and a kitchen-garden.", provides: ["BED", "HEARTH"], quantities: { BED: 4 }, tierMin: "village", minFootprintBlocks: 36, maxFootprintBlocks: 100, minHeightBlocks: 4, upgradesFrom: "hovel", level: 2 },
+  { id: "house", displayName: "House", category: "residential", housingClass: "peasant", description: "A prosperous freeholder's two-storey home with outbuildings.", provides: ["BED", "HEARTH"], quantities: { BED: 6 }, tierMin: "burgh", minFootprintBlocks: 64, maxFootprintBlocks: 200, minHeightBlocks: 6, upgradesFrom: "cottage", level: 3 },
+  { id: "croft", displayName: "Croft", category: "residential", housingClass: "peasant", description: "A smallholding cottage with its own strip of garden and a beast-shed.", provides: ["BED", "HEARTH"], quantities: { BED: 3 }, tierMin: "hamlet", minFootprintBlocks: 30, maxFootprintBlocks: 90, minHeightBlocks: 3 },
+  { id: "cotters_cabin", displayName: "Cotter's Cabin", category: "residential", housingClass: "peasant", description: "A landless labourer's one-room cabin, raised quick and cheap.", provides: ["BED"], quantities: { BED: 2 }, tierMin: "hamlet", minFootprintBlocks: 16, maxFootprintBlocks: 40, minHeightBlocks: 3 },
+  { id: "fishers_hut", displayName: "Fisher's Hut", category: "residential", housingClass: "peasant", description: "A net-loft and living-room on the strand, smelling of tar and brine.", provides: ["BED", "STORAGE"], quantities: { BED: 3 }, tierMin: "village", minFootprintBlocks: 25, maxFootprintBlocks: 80, minHeightBlocks: 4 },
+  { id: "longhouse", displayName: "Longhouse", category: "residential", housingClass: "peasant", description: "A communal hall where a whole kin-group lives under one ridge.", provides: ["BED", "HEARTH", "TABLE"], quantities: { BED: 10, HEARTH: 2 }, tierMin: "village", minFootprintBlocks: 80, maxFootprintBlocks: 220, minHeightBlocks: 6 },
+  { id: "tenement", displayName: "Tenement", category: "residential", housingClass: "peasant", description: "Stacked dwellings sharing stair and yard — the city's densest housing.", provides: ["BED"], quantities: { BED: 12 }, tierMin: "city", minFootprintBlocks: 80, maxFootprintBlocks: 200, minHeightBlocks: 12 },
+
+  // Artisan — workshop-homes.
+  { id: "craft_cottage", displayName: "Craft Cottage", category: "residential", housingClass: "artisan", description: "A cottage with a workbench by the window and a tool-store.", provides: ["BED", "HEARTH", "STORAGE"], quantities: { BED: 4 }, tierMin: "village", minFootprintBlocks: 40, maxFootprintBlocks: 110, minHeightBlocks: 4 },
+  { id: "workshop_house", displayName: "Workshop House", category: "residential", housingClass: "artisan", description: "Craft plied on the ground floor, the family lodged above.", provides: ["BED", "HEARTH", "STORAGE"], quantities: { BED: 6 }, tierMin: "burgh", minFootprintBlocks: 60, maxFootprintBlocks: 180, minHeightBlocks: 6, upgradesFrom: "craft_cottage", level: 2 },
+  { id: "weavers_house", displayName: "Weaver's House", category: "residential", housingClass: "artisan", description: "A tall, loom-lit house with wide upper windows for the work.", provides: ["BED", "STORAGE"], quantities: { BED: 5 }, tierMin: "burgh", minFootprintBlocks: 40, maxFootprintBlocks: 120, minHeightBlocks: 8 },
+  { id: "guild_lodging", displayName: "Guild Lodging", category: "residential", housingClass: "artisan", description: "Shared lodging above a guild hall for journeymen and apprentices.", provides: ["BED", "TABLE"], quantities: { BED: 8 }, tierMin: "town", minFootprintBlocks: 80, maxFootprintBlocks: 220, minHeightBlocks: 7 },
+
+  // Merchant — the wealthy frontages.
+  { id: "townhouse", displayName: "Town House", category: "residential", housingClass: "merchant", description: "A narrow, tall row-house that wrings many beds from a small frontage.", provides: ["BED", "HEARTH"], quantities: { BED: 6 }, tierMin: "town", minFootprintBlocks: 36, maxFootprintBlocks: 110, minHeightBlocks: 9 },
+  { id: "merchant_house", displayName: "Merchant House", category: "residential", housingClass: "merchant", description: "A counting-room below, comfortable lodgings and a strong-room above.", provides: ["BED", "HEARTH", "STORAGE"], quantities: { BED: 8 }, tierMin: "town", minFootprintBlocks: 80, maxFootprintBlocks: 240, minHeightBlocks: 8, upgradesFrom: "townhouse", level: 2 },
+  { id: "counting_house", displayName: "Counting House", category: "residential", housingClass: "merchant", description: "Ledgers, scales, and a clerk's lodging over a tiled hall.", provides: ["BED", "STORAGE"], quantities: { BED: 5 }, tierMin: "city", minFootprintBlocks: 60, maxFootprintBlocks: 180, minHeightBlocks: 7 },
+  { id: "warehouse_loft", displayName: "Warehouse Loft", category: "residential", housingClass: "merchant", description: "Lodging over a goods-warehouse by the wharves and gates.", provides: ["BED", "STORAGE"], quantities: { BED: 10, STORAGE: 2 }, tierMin: "city", minFootprintBlocks: 100, maxFootprintBlocks: 300, minHeightBlocks: 8 },
+
+  // Scholar — the lettered lodgings.
+  { id: "scholars_lodging", displayName: "Scholar's Lodging", category: "residential", housingClass: "scholar", description: "Quiet rooms with a writing-desk, close by the library.", provides: ["BED", "LECTERN"], quantities: { BED: 4 }, tierMin: "town", minFootprintBlocks: 40, maxFootprintBlocks: 120, minHeightBlocks: 5 },
+  { id: "study_house", displayName: "Study House", category: "residential", housingClass: "scholar", description: "A scholar's house with a shelved study and a small hearth.", provides: ["BED", "HEARTH", "LECTERN"], quantities: { BED: 6 }, tierMin: "town", minFootprintBlocks: 60, maxFootprintBlocks: 160, minHeightBlocks: 6, upgradesFrom: "scholars_lodging", level: 2 },
+  { id: "cloister_cell", displayName: "Cloister Cells", category: "residential", housingClass: "scholar", description: "A range of plain study-cells around a quiet court.", provides: ["BED", "LECTERN"], quantities: { BED: 8, LECTERN: 2 }, tierMin: "city", minFootprintBlocks: 80, maxFootprintBlocks: 240, minHeightBlocks: 6 },
+
+  // Noble — few, but high.
+  { id: "town_manor", displayName: "Town Manor", category: "residential", housingClass: "noble", description: "An urban noble residence behind its own wall and gate.", provides: ["BED", "HEARTH", "TABLE"], quantities: { BED: 8, HEARTH: 2 }, tierMin: "town", minFootprintBlocks: 120, maxFootprintBlocks: 320, minHeightBlocks: 8 },
+  { id: "manor_house", displayName: "Manor House", category: "residential", housingClass: "noble", description: "A walled hall with servants' quarters — houses a lord and his household.", provides: ["BED", "HEARTH", "TABLE"], quantities: { BED: 10, HEARTH: 2 }, tierMin: "town", minFootprintBlocks: 150, maxFootprintBlocks: 400, minHeightBlocks: 8 },
+  { id: "villa", displayName: "Villa", category: "residential", housingClass: "noble", description: "A grand country seat with garden courts and a colonnade.", provides: ["BED", "HEARTH", "TABLE"], quantities: { BED: 14, HEARTH: 3 }, tierMin: "city", minFootprintBlocks: 200, maxFootprintBlocks: 600, minHeightBlocks: 8, upgradesFrom: "manor_house", level: 2 },
+  { id: "great_house", displayName: "Great House", category: "residential", housingClass: "noble", description: "The towered seat of a great family — a hall, wings, and a private court.", provides: ["BED", "HEARTH", "TABLE", "BANNER"], quantities: { BED: 16, HEARTH: 3 }, tierMin: "city", minFootprintBlocks: 250, maxFootprintBlocks: 700, minHeightBlocks: 10, upgradesFrom: "villa", level: 3 },
 
   { id: "bunkhouse", displayName: "Bunkhouse", category: "functional", description: "Rows of bunks under one roof — soldiers' billets.", provides: ["BED"], quantities: { BED: 8 }, minFootprintBlocks: 30, maxFootprintBlocks: 120 },
   { id: "bakehouse", displayName: "Bakehouse", category: "functional", description: "Ovens, a kneading-bench, a flour-bin.", provides: ["COOKING"], minFootprintBlocks: 25 },
@@ -510,18 +577,13 @@ export const buildingTypesCatalogue: BuildingSeed[] = [
 
 // --- Building tags (verifiable themes) -----------------------------------
 
+// NOTE: every category:'residential' building is auto-tagged
+// 'theme:residential' by the seed loop, so the housing quarters' themed
+// slot is satisfied without listing each house here.
 export const buildingTagsCatalogue = [
-  { buildingTypeId: "hovel", tag: "theme:residential" },
-  { buildingTypeId: "cottage", tag: "theme:residential" },
-  { buildingTypeId: "house", tag: "theme:residential" },
-  { buildingTypeId: "townhouse", tag: "theme:residential" },
-  { buildingTypeId: "manor_house", tag: "theme:residential" },
-  { buildingTypeId: "tenement", tag: "theme:residential" },
-  { buildingTypeId: "longhouse", tag: "theme:residential" },
-  { buildingTypeId: "townhouse", tag: "theme:urban" },
-  { buildingTypeId: "tenement", tag: "theme:urban" },
-  { buildingTypeId: "manor_house", tag: "theme:noble" },
   { buildingTypeId: "longhouse", tag: "theme:communal" },
+  { buildingTypeId: "guild_lodging", tag: "theme:communal" },
+  { buildingTypeId: "cloister_cell", tag: "theme:communal" },
   { buildingTypeId: "bakehouse", tag: "theme:bakery" },
   { buildingTypeId: "great_bakehouse", tag: "theme:bakery" },
   { buildingTypeId: "flour_mill", tag: "theme:bakery" },
@@ -580,16 +642,23 @@ export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
   { districtTypeId: "watchtower", kind: "specific", buildingTypeId: "watchpost", count: 1, themeNote: null },
   { districtTypeId: "tavern", kind: "specific", buildingTypeId: "hearth_hall", count: 1, themeNote: null },
 
-  // Residential quarters: any housing buildings (theme:residential) the
-  // player chooses, in number. The kind of quarter narrows the theme.
-  { districtTypeId: "crofters_holding", kind: "themed", buildingTypeId: null, count: 2, themeNote: "housing", themeTag: "theme:residential" },
-  { districtTypeId: "cottage_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "housing", themeTag: "theme:residential" },
-  { districtTypeId: "longhouse_steading", kind: "themed", buildingTypeId: null, count: 2, themeNote: "communal housing", themeTag: "theme:communal" },
-  { districtTypeId: "artisans_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "housing", themeTag: "theme:residential" },
-  { districtTypeId: "town_quarter", kind: "themed", buildingTypeId: null, count: 4, themeNote: "housing", themeTag: "theme:residential" },
-  { districtTypeId: "merchant_row", kind: "themed", buildingTypeId: null, count: 3, themeNote: "town-houses or manor-houses", themeTag: "theme:residential" },
-  { districtTypeId: "tenement_block", kind: "themed", buildingTypeId: null, count: 3, themeNote: "dense urban housing", themeTag: "theme:urban" },
-  { districtTypeId: "noble_estate", kind: "specific", buildingTypeId: "manor_house", count: 1, themeNote: null },
+  // Residential quarters require N housing buildings (theme:residential). The
+  // class ceiling (district populationClass vs each building's housingClass)
+  // is enforced separately, so the player is free to fill the slots with any
+  // housing of the quarter's class or lower.
+  { districtTypeId: "crofters_holding", kind: "themed", buildingTypeId: null, count: 2, themeNote: "peasant housing", themeTag: "theme:residential" },
+  { districtTypeId: "cottage_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "peasant housing", themeTag: "theme:residential" },
+  { districtTypeId: "fishing_village", kind: "themed", buildingTypeId: null, count: 3, themeNote: "peasant housing", themeTag: "theme:residential" },
+  { districtTypeId: "longhouse_steading", kind: "themed", buildingTypeId: null, count: 2, themeNote: "communal housing", themeTag: "theme:residential" },
+  { districtTypeId: "common_quarter", kind: "themed", buildingTypeId: null, count: 4, themeNote: "peasant housing", themeTag: "theme:residential" },
+  { districtTypeId: "artisans_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "artisan housing", themeTag: "theme:residential" },
+  { districtTypeId: "craft_lane", kind: "themed", buildingTypeId: null, count: 4, themeNote: "artisan housing", themeTag: "theme:residential" },
+  { districtTypeId: "merchants_row", kind: "themed", buildingTypeId: null, count: 3, themeNote: "merchant housing", themeTag: "theme:residential" },
+  { districtTypeId: "counting_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "merchant housing", themeTag: "theme:residential" },
+  { districtTypeId: "scholars_close", kind: "themed", buildingTypeId: null, count: 3, themeNote: "scholar housing", themeTag: "theme:residential" },
+  { districtTypeId: "cloister", kind: "themed", buildingTypeId: null, count: 2, themeNote: "scholar housing", themeTag: "theme:residential" },
+  { districtTypeId: "noble_estate", kind: "themed", buildingTypeId: null, count: 2, themeNote: "housing (manor + servants)", themeTag: "theme:residential" },
+  { districtTypeId: "high_quarter", kind: "themed", buildingTypeId: null, count: 3, themeNote: "noble housing", themeTag: "theme:residential" },
 ];
 
 // --- District required components -----------------------------------------
@@ -599,9 +668,11 @@ export const districtRequiredComponentsCatalogue = [
   // summed from them), so the quarter only adds shared amenities. Denser /
   // larger quarters need a public well; estates a hearth-hall table.
   { districtTypeId: "cottage_quarter", componentId: "WELL", count: 1, perCap: false },
-  { districtTypeId: "town_quarter", componentId: "WELL", count: 1, perCap: false },
-  { districtTypeId: "tenement_block", componentId: "WELL", count: 2, perCap: false },
+  { districtTypeId: "common_quarter", componentId: "WELL", count: 2, perCap: false },
   { districtTypeId: "artisans_quarter", componentId: "WELL", count: 1, perCap: false },
+  { districtTypeId: "craft_lane", componentId: "WELL", count: 1, perCap: false },
+  { districtTypeId: "merchants_row", componentId: "WELL", count: 1, perCap: false },
+  { districtTypeId: "counting_quarter", componentId: "WELL", count: 1, perCap: false },
   // Production / functional districts.
   { districtTypeId: "wheat_farm", componentId: "STORAGE", count: 1, perCap: false },
   { districtTypeId: "bakery", componentId: "COOKING", count: 1, perCap: false },
@@ -634,12 +705,17 @@ export const districtFootprintCatalogue = [
   // Residential quarters are large plots holding several housing buildings.
   { id: "crofters_holding", minFootprintBlocks: 200, maxFootprintBlocks: 900, minHeightBlocks: 3 },
   { id: "cottage_quarter", minFootprintBlocks: 150, maxFootprintBlocks: 600, minHeightBlocks: 4 },
+  { id: "fishing_village", minFootprintBlocks: 150, maxFootprintBlocks: 600, minHeightBlocks: 4 },
   { id: "longhouse_steading", minFootprintBlocks: 200, maxFootprintBlocks: 700, minHeightBlocks: 5 },
+  { id: "common_quarter", minFootprintBlocks: 150, maxFootprintBlocks: 500, minHeightBlocks: 12 },
   { id: "artisans_quarter", minFootprintBlocks: 150, maxFootprintBlocks: 500, minHeightBlocks: 5 },
-  { id: "town_quarter", minFootprintBlocks: 200, maxFootprintBlocks: 700, minHeightBlocks: 6 },
-  { id: "merchant_row", minFootprintBlocks: 150, maxFootprintBlocks: 500, minHeightBlocks: 8 },
-  { id: "tenement_block", minFootprintBlocks: 150, maxFootprintBlocks: 500, minHeightBlocks: 12 },
+  { id: "craft_lane", minFootprintBlocks: 150, maxFootprintBlocks: 500, minHeightBlocks: 6 },
+  { id: "merchants_row", minFootprintBlocks: 150, maxFootprintBlocks: 500, minHeightBlocks: 8 },
+  { id: "counting_quarter", minFootprintBlocks: 150, maxFootprintBlocks: 500, minHeightBlocks: 9 },
+  { id: "scholars_close", minFootprintBlocks: 150, maxFootprintBlocks: 450, minHeightBlocks: 5 },
+  { id: "cloister", minFootprintBlocks: 200, maxFootprintBlocks: 600, minHeightBlocks: 6 },
   { id: "noble_estate", minFootprintBlocks: 300, maxFootprintBlocks: 900, minHeightBlocks: 8 },
+  { id: "high_quarter", minFootprintBlocks: 250, maxFootprintBlocks: 800, minHeightBlocks: 9 },
   { id: "bakery", minFootprintBlocks: 49, maxFootprintBlocks: 200, minHeightBlocks: 5 },
   { id: "smithy", minFootprintBlocks: 64, maxFootprintBlocks: 256, minHeightBlocks: 5 },
   { id: "foundry", minFootprintBlocks: 100, maxFootprintBlocks: 400, minHeightBlocks: 8 },
@@ -758,7 +834,7 @@ export const buildingVariantsCatalogue = [
   // Tenement.
   { buildingTypeId: "tenement", cultureId: "gondorian", variantName: "Insula", description: "A stacked stone tenement around a shared light-well and stair.", paletteNote: "Stone brick, slate, shared courtyard." },
   // Manor House.
-  { buildingTypeId: "manor_house", cultureId: "gondorian", variantName: "Town Manor", description: "A walled stone manor with a gatehouse, garden court, and servants' wing.", paletteNote: "White ashlar, black marble, gardens." },
+  { buildingTypeId: "manor_house", cultureId: "gondorian", variantName: "Stone Manor", description: "A walled ashlar manor with a gatehouse, garden court, and servants' wing.", paletteNote: "White ashlar, black marble, gardens." },
   // Longhouse.
   { buildingTypeId: "longhouse", cultureId: "rohirric", variantName: "Kin-Hall", description: "A turf-banked timber longhouse sheltering a whole household and its beasts at the byre end.", paletteNote: "Spruce, thatch, turf banking." },
   { buildingTypeId: "longhouse", cultureId: "dunlending", variantName: "Clan Longhouse", description: "A drystone-and-hide longhouse, smoke-blackened, hung with clan tokens.", paletteNote: "Cobble and hide, hay roof." },
