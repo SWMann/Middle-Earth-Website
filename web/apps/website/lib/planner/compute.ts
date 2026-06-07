@@ -114,6 +114,14 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
     return typeof v === "number" ? v : 0;
   };
 
+  // Per-building production outputs (the building-driven economy model).
+  const outputsByBuilding = new Map<string, typeof cat.buildingOutputs>();
+  for (const o of cat.buildingOutputs) {
+    if (!outputsByBuilding.has(o.buildingTypeId)) outputsByBuilding.set(o.buildingTypeId, []);
+    outputsByBuilding.get(o.buildingTypeId)!.push(o);
+  }
+  const hasOutput = new Set(cat.buildingOutputs.map((o) => o.buildingTypeId));
+
   // resourceId -> the tags it satisfies (for supply-chain reconciliation).
   const tagsByResource = new Map<string, Set<string>>();
   for (const rt of cat.resourceTags) {
@@ -178,15 +186,36 @@ export function computePreview(plan: Plan, cat: PlannerCatalogue) {
         (t) => t.districtTypeId === dt.id && t.tier === tier,
       );
       const tierMult = (tierMultRow?.multiplierPct ?? 100) / 100;
+      const outMult = tierMult * (1 + outputScalePct / 100);
       const dProd: Num = {};
-      for (const p of cat.produces.filter((x) => x.districtTypeId === dt.id))
-        add(dProd, p.resourceId, p.dailyAmount * tierMult * (1 + outputScalePct / 100));
+      let dEffectCoin = 0;
 
+      // Output buildings raised in this instance (those carrying outputs).
+      const outputBuildingCount = inst.buildings
+        .filter((b) => hasOutput.has(b.buildingTypeId))
+        .reduce((s, b) => s + b.count, 0);
+
+      if (dt.outputFromBuildings) {
+        // Output is the SUM of the production buildings' yields.
+        for (const b of inst.buildings) {
+          for (const o of outputsByBuilding.get(b.buildingTypeId) ?? []) {
+            if (o.outputKind === "coin") dEffectCoin += o.dailyAmount * b.count * outMult;
+            else if (o.resourceId) add(dProd, o.resourceId, o.dailyAmount * b.count * outMult);
+          }
+        }
+      } else {
+        // Flat per-district yield (tile-based extraction / agriculture).
+        for (const p of cat.produces.filter((x) => x.districtTypeId === dt.id))
+          add(dProd, p.resourceId, p.dailyAmount * outMult);
+      }
+
+      // Consumption: for output-from-buildings districts the input recipe is
+      // PER production building, so input scales with output.
+      const consumeMult = dt.outputFromBuildings ? outputBuildingCount : 1;
       const dCons: Num = {};
       for (const c of cat.consumes.filter((x) => x.districtTypeId === dt.id))
-        if (c.consumptionPeriod === "daily") add(dCons, c.tagId, c.dailyAmount);
+        if (c.consumptionPeriod === "daily") add(dCons, c.tagId, c.dailyAmount * consumeMult);
 
-      let dEffectCoin = 0;
       let dDpBase = 0;
       for (const e of cat.effects.filter((x) => x.districtTypeId === dt.id)) {
         const amount = Number((e.params as Record<string, unknown>)?.amount ?? 0);

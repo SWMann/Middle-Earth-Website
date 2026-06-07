@@ -36,6 +36,7 @@ import {
   functionalComponentsCatalogue,
   buildingTypesCatalogue,
   buildingTagsCatalogue,
+  buildingOutputsCatalogue,
   districtRequiredBuildingsCatalogue,
   districtScaleBonusesCatalogue,
   districtRequiredComponentsCatalogue,
@@ -623,6 +624,7 @@ async function main() {
       mandatoryAtTier: d.mandatoryAtTier ?? null,
       upgradesFrom: d.upgradesFrom ?? null,
       capFromHousing: d.capFromHousing ?? false,
+      outputFromBuildings: d.outputFromBuildings ?? false,
       populationClass: d.populationClass ?? null,
       metadata: d.metadata ?? {},
     };
@@ -650,6 +652,7 @@ async function main() {
           mandatoryAtTier: row.mandatoryAtTier,
           upgradesFrom: row.upgradesFrom,
           capFromHousing: row.capFromHousing,
+          outputFromBuildings: row.outputFromBuildings,
           populationClass: row.populationClass,
           metadata: row.metadata,
         },
@@ -688,6 +691,7 @@ async function main() {
   await db.execute(sqlOp`DELETE FROM config.district_required_buildings`);
   await db.execute(sqlOp`DELETE FROM config.building_provides_components`);
   await db.execute(sqlOp`DELETE FROM config.building_tags`);
+  await db.execute(sqlOp`DELETE FROM config.building_outputs`);
 
   // Housing rework: retired residential DISTRICT ids. The old single-building
   // ones (hovel/cottage/house/manor) became buildings; the first-pass quarters
@@ -740,6 +744,9 @@ async function main() {
   }
   for (const bt of buildingTagsCatalogue) {
     await db.insert(schema.buildingTags).values(bt);
+  }
+  for (const bo of buildingOutputsCatalogue) {
+    await db.insert(schema.buildingOutputs).values(bo);
   }
   for (const rb of districtRequiredBuildingsCatalogue) {
     await db.insert(schema.districtRequiredBuildings).values({

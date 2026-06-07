@@ -138,6 +138,14 @@ export const districtTypes = config.table("district_types", {
    */
   capFromHousing: boolean("cap_from_housing").notNull().default(false),
   /**
+   * For production districts: when true, the district's daily output is the
+   * SUM of its production buildings' outputs (config.building_outputs), and
+   * its input demand scales per production building too — so building count
+   * and choice drive the economy. When false, output is the flat
+   * district_produces amount (extraction/farms, which are tile-based).
+   */
+  outputFromBuildings: boolean("output_from_buildings").notNull().default(false),
+  /**
    * For residential districts: the occupation class this quarter is FOR
    * (config.occupation_classes.id). It is the CEILING — the quarter accepts
    * housing of this class or any lower-standing one (a Noble Estate may hold
@@ -499,6 +507,28 @@ export const buildingTypes = config.table("building_types", {
   housingClass: text("housing_class"),
 
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+});
+
+/**
+ * What a production building yields per day. A district flagged
+ * outputFromBuildings produces the SUM of its buildings' outputs (a Smithy
+ * with 3 Forge Houses makes 3× iron), so building choice and count drive the
+ * economy — the production analogue of housing's "cap from beds".
+ *
+ * outputKind:
+ *   primary    the headline good (a Forge → Iron Ingot)
+ *   byproduct  incidental output (a Forge → Slag)
+ *   coin       trade margin, not a resource (a Warehouse → coin/day);
+ *              resourceId is NULL for these rows
+ */
+export const buildingOutputs = config.table("building_outputs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  buildingTypeId: text("building_type_id")
+    .notNull()
+    .references(() => buildingTypes.id),
+  resourceId: text("resource_id").references(() => resources.id),
+  dailyAmount: integer("daily_amount").notNull(),
+  outputKind: text("output_kind").notNull().default("primary"),
 });
 
 /**
@@ -935,6 +965,7 @@ export type UnitAbility = typeof unitAbilities.$inferSelect;
 export type BuildingType = typeof buildingTypes.$inferSelect;
 export type FunctionalComponent = typeof functionalComponents.$inferSelect;
 export type BuildingTag = typeof buildingTags.$inferSelect;
+export type BuildingOutput = typeof buildingOutputs.$inferSelect;
 export type DecorationCriterion = typeof decorationCriteria.$inferSelect;
 export type TierDecorationThreshold = typeof tierDecorationThresholds.$inferSelect;
 export type DistrictScaleBonus = typeof districtScaleBonuses.$inferSelect;

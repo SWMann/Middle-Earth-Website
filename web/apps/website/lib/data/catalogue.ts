@@ -449,6 +449,35 @@ export const getBuildingTags = cache(async (buildingTypeId: string) => {
   return rows.map((r) => r.tag);
 });
 
+/** What a production building yields per day. */
+export const getBuildingOutputs = cache(async (buildingTypeId: string) => {
+  return await db
+    .select({
+      id: schema.buildingOutputs.id,
+      resourceId: schema.buildingOutputs.resourceId,
+      resourceName: schema.resources.displayName,
+      dailyAmount: schema.buildingOutputs.dailyAmount,
+      outputKind: schema.buildingOutputs.outputKind,
+    })
+    .from(schema.buildingOutputs)
+    .leftJoin(schema.resources, eq(schema.buildingOutputs.resourceId, schema.resources.id))
+    .where(eq(schema.buildingOutputs.buildingTypeId, buildingTypeId));
+});
+
+/** All building outputs in one shot, for the buildings index. */
+export const getAllBuildingOutputs = cache(async () => {
+  return await db
+    .select({
+      buildingTypeId: schema.buildingOutputs.buildingTypeId,
+      resourceId: schema.buildingOutputs.resourceId,
+      resourceName: schema.resources.displayName,
+      dailyAmount: schema.buildingOutputs.dailyAmount,
+      outputKind: schema.buildingOutputs.outputKind,
+    })
+    .from(schema.buildingOutputs)
+    .leftJoin(schema.resources, eq(schema.buildingOutputs.resourceId, schema.resources.id));
+});
+
 /** All building tags in one shot, for the buildings index. */
 export const getAllBuildingTags = cache(async () => {
   return await db

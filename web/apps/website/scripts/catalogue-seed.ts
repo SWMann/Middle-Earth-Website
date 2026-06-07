@@ -20,6 +20,16 @@ export const tagsCatalogue = [
   { id: "T:Hide", displayName: "Hide", description: "Skins and leathers." },
   { id: "T:Cloth", displayName: "Cloth", description: "Woven materials." },
   { id: "T:Food", displayName: "Food", description: "Edibles. Provides food_value when consumed." },
+  // --- Production chains ---
+  { id: "T:Rawhide", displayName: "Raw Hide", description: "Untanned skins, input to a tannery." },
+  { id: "T:Textile", displayName: "Textile", description: "Finished woven cloth." },
+  { id: "T:Timber", displayName: "Timber", description: "Sawn planks and dressed wood." },
+  { id: "T:Ammunition", displayName: "Ammunition", description: "Arrows, bolts, and shot." },
+  { id: "T:Drink", displayName: "Drink", description: "Ale, mead, and brewed goods." },
+  { id: "T:ClayRaw", displayName: "Raw Clay", description: "Dug clay, input to a kiln." },
+  { id: "T:GlassRaw", displayName: "Glass Sand", description: "Silica sand, input to a glassworks." },
+  { id: "T:Goods", displayName: "Finished Goods", description: "Wrought wares — glass, pottery, and the like." },
+  { id: "T:Luxury", displayName: "Luxury", description: "High-value finished goods for the wealthy." },
 ];
 
 // --- Resources -----------------------------------------------------------
@@ -39,6 +49,17 @@ export const resourcesCatalogue = [
   { id: "R:Mithril_Ore", displayName: "Mithril Ore", description: "True-silver. Found only where the deep mountains permit. Priceless.", foodValue: 0 },
   { id: "R:Mallorn", displayName: "Mallorn Timber", description: "Silver-barked, gold-leafed wood of Lothlórien. Stronger than oak, lighter than ash.", foodValue: 0 },
   { id: "R:Slag", displayName: "Slag", description: "Glassy waste from smelting. Worthless to a smith, but cheap rubble-fill for foundations.", foodValue: 0 },
+  // --- Production chains ---
+  { id: "R:Hide", displayName: "Raw Hide", description: "Untanned skins from herds and the hunt. Tan it into leather.", foodValue: 0 },
+  { id: "R:Cloth", displayName: "Cloth", description: "Woven wool, fulled and finished. The weaver's stock.", foodValue: 0 },
+  { id: "R:Planks", displayName: "Planks", description: "Sawn and dressed timber, ready for the joiner.", foodValue: 0 },
+  { id: "R:Arrows", displayName: "Arrows", description: "Fletched shafts by the sheaf. The archer's want.", foodValue: 0 },
+  { id: "R:Ale", displayName: "Ale", description: "Brewed from grain. The hearth's comfort and the tavern's trade.", foodValue: 4 },
+  { id: "R:Clay", displayName: "Clay", description: "Dug and puddled clay, raw for the kiln.", foodValue: 0 },
+  { id: "R:Brick", displayName: "Brick", description: "Fired clay block. Fireproof, and grander than rubble.", foodValue: 0 },
+  { id: "R:Sand", displayName: "Glass Sand", description: "Fine silica, washed and graded for the furnace.", foodValue: 0 },
+  { id: "R:Glass", displayName: "Glass", description: "Blown and cast panes and vessels. A mark of a wealthy town.", foodValue: 0 },
+  { id: "R:Jewellery", displayName: "Jewellery", description: "Wrought precious metal and set stones. Worn by the great.", foodValue: 0 },
 ];
 
 // --- Resource → Tag weights ----------------------------------------------
@@ -64,6 +85,20 @@ export const resourceTagMappings = [
   { resourceId: "R:Mallorn", tagId: "T:Building", weight: 4 },
   { resourceId: "R:Mallorn", tagId: "T:Fuel", weight: 1 },
   { resourceId: "R:Slag", tagId: "T:Building", weight: 1 },
+  // --- Production chains ---
+  { resourceId: "R:Hide", tagId: "T:Rawhide", weight: 2 },
+  { resourceId: "R:Cloth", tagId: "T:Textile", weight: 3 },
+  { resourceId: "R:Cloth", tagId: "T:Cloth", weight: 3 },
+  { resourceId: "R:Planks", tagId: "T:Timber", weight: 3 },
+  { resourceId: "R:Planks", tagId: "T:Building", weight: 2 },
+  { resourceId: "R:Arrows", tagId: "T:Ammunition", weight: 2 },
+  { resourceId: "R:Ale", tagId: "T:Drink", weight: 2 },
+  { resourceId: "R:Ale", tagId: "T:Food", weight: 1 },
+  { resourceId: "R:Clay", tagId: "T:ClayRaw", weight: 2 },
+  { resourceId: "R:Brick", tagId: "T:Building", weight: 3 },
+  { resourceId: "R:Sand", tagId: "T:GlassRaw", weight: 2 },
+  { resourceId: "R:Glass", tagId: "T:Goods", weight: 3 },
+  { resourceId: "R:Jewellery", tagId: "T:Luxury", weight: 3 },
 ];
 
 // --- District types -------------------------------------------------------
@@ -98,6 +133,8 @@ export type DistrictSeed = {
   capFromHousing?: boolean;
   /** Residential quarters: the occupation class ceiling (and identity). */
   populationClass?: string;
+  /** Industrial districts: output = sum of production buildings' outputs. */
+  outputFromBuildings?: boolean;
   metadata?: Record<string, unknown>;
 };
 
@@ -221,11 +258,29 @@ export const districtTypesCatalogue: DistrictSeed[] = [
     description: "A tended stand of mallorn. Harvested with reverence, never clear-cut. Only the Galadhrim know the way of it.",
   },
 
-  // ----- Industrial -----
+  // Raised herds (Wool + Hide for the textile and leather chains).
+  {
+    id: "pasture", displayName: "Pasture", category: "agricultural", tierMin: "village",
+    popCost: 2, requiredBiomes: ["plain"], buildCoinCost: 25, buildTimeDays: 1,
+    description: "Grazed flocks and herds — shorn for wool and slaughtered for hide. Needs open grassland.",
+  },
+  // Earths for the kiln and the glassworks.
+  {
+    id: "clay_pit", displayName: "Clay Pit", category: "extraction", tierMin: "village",
+    popCost: 2, terrainRequirement: "river", buildCoinCost: 20, buildTimeDays: 1,
+    description: "Dug and puddled river-clay, raw for the brick-kiln and the potter.",
+  },
+  {
+    id: "sand_pit", displayName: "Sand Pit", category: "extraction", tierMin: "burgh",
+    popCost: 2, terrainRequirement: "coastal", buildCoinCost: 30, buildTimeDays: 1,
+    description: "Washed silica sand from the strand, graded for the glass-furnace.",
+  },
+
+  // ----- Industrial (output scales with the production buildings inside) ---
   {
     id: "bakery", displayName: "Bakery", category: "industrial", tierMin: "village",
-    popCost: 2, buildCoinCost: 50, buildTimeDays: 2,
-    description: "Hearth-baked bread from grain. Settlement's daily food anchor. Works far better beside a farm.",
+    popCost: 2, buildCoinCost: 50, buildTimeDays: 2, outputFromBuildings: true,
+    description: "Hearth-baked bread from grain. Output rises with every bakehouse you raise. Works far better beside a farm.",
   },
   {
     id: "charcoal_burner", displayName: "Charcoal Burner", category: "industrial", tierMin: "village",
@@ -234,16 +289,51 @@ export const districtTypesCatalogue: DistrictSeed[] = [
   },
   {
     id: "smithy", displayName: "Smithy", category: "industrial", tierMin: "burgh",
-    popCost: 2, buildCoinCost: 100, buildTimeDays: 3,
-    description: "Smelts ore into ingots. Higher-weight fuel yields cleaner metal.",
+    popCost: 2, buildCoinCost: 100, buildTimeDays: 3, outputFromBuildings: true,
+    description: "Smelts ore into ingots — a forge at a time. More forges, more iron (and more slag).",
   },
   {
     id: "foundry", displayName: "Foundry", category: "industrial", tierMin: "town",
-    popCost: 4, buildCoinCost: 250, buildTimeDays: 5, upkeepCoinDaily: 2,
-    description: "Steel from iron under sustained heat. Requires high-grade fuel and an existing smithy's expertise.",
+    popCost: 4, buildCoinCost: 250, buildTimeDays: 5, upkeepCoinDaily: 2, outputFromBuildings: true,
+    description: "Steel from iron under sustained heat. Each blast-furnace adds to the yield; needs high-grade fuel.",
+  },
+  {
+    id: "sawmill", displayName: "Sawmill", category: "industrial", tierMin: "village",
+    popCost: 2, buildCoinCost: 60, buildTimeDays: 2, outputFromBuildings: true,
+    description: "Frame-saws dress felled timber into planks. Output rises with every saw-frame.",
+  },
+  {
+    id: "tannery", displayName: "Tannery", category: "industrial", tierMin: "burgh",
+    popCost: 2, buildCoinCost: 70, buildTimeDays: 2, outputFromBuildings: true,
+    description: "Tans raw hide into leather over weeks in the pits. Sited downwind, always.",
+  },
+  {
+    id: "weavers_mill", displayName: "Weavers' Mill", category: "industrial", tierMin: "burgh",
+    popCost: 2, buildCoinCost: 70, buildTimeDays: 2, outputFromBuildings: true,
+    description: "Looms turn raw wool into finished cloth — the backbone of trade and the armourer's padding.",
+  },
+  {
+    id: "brewery", displayName: "Brewery", category: "industrial", tierMin: "village",
+    popCost: 2, buildCoinCost: 60, buildTimeDays: 2, outputFromBuildings: true,
+    description: "Mash, boil, and cask grain into ale. Every vat adds to the settlement's cheer and its tolls.",
+  },
+  {
+    id: "kiln_yard", displayName: "Kiln Yard", category: "industrial", tierMin: "burgh",
+    popCost: 2, buildCoinCost: 80, buildTimeDays: 2, outputFromBuildings: true,
+    description: "Wood-fired kilns bake river-clay into brick. Fireproof building stock for a growing town.",
+  },
+  {
+    id: "fletcher", displayName: "Fletcher's Yard", category: "military", tierMin: "town",
+    popCost: 2, buildCoinCost: 80, buildTimeDays: 2, outputFromBuildings: true,
+    description: "Shafts, heads, and feathers married into arrows by the sheaf. The archer's supply.",
+  },
+  {
+    id: "glassworks", displayName: "Glassworks", category: "industrial", tierMin: "town",
+    popCost: 3, buildCoinCost: 150, buildTimeDays: 4, upkeepCoinDaily: 1, outputFromBuildings: true,
+    description: "Furnaces melt sand to glass for panes and vessels — a luxury of the wealthier towns.",
   },
 
-  // ----- Trade -----
+  // ----- Trade & logistics -----
   {
     id: "market", displayName: "Market", category: "trade", tierMin: "village",
     popCost: 1, buildCoinCost: 40, buildTimeDays: 2, maxPerSettlement: 1,
@@ -254,8 +344,23 @@ export const districtTypesCatalogue: DistrictSeed[] = [
     popCost: 2, terrainRequirement: "coastal", buildCoinCost: 80, buildTimeDays: 3,
     description: "Quays, a breakwater, and berths. The seat of sea trade and naval power — coastal tiles only.",
   },
+  {
+    id: "trade_warehouse", displayName: "Trade Warehouse", category: "trade", tierMin: "town",
+    popCost: 2, buildCoinCost: 120, buildTimeDays: 3, outputFromBuildings: true,
+    description: "Bonded stores and a carter's yard. Every warehouse moves more goods, and skims more coin in the moving.",
+  },
 
   // ----- Luxury (DP) -----
+  {
+    id: "mint", displayName: "Mint", category: "luxury", tierMin: "city",
+    popCost: 2, buildCoinCost: 300, buildTimeDays: 4, upkeepCoinDaily: 2, maxPerSettlement: 1, outputFromBuildings: true,
+    description: "Strikes bullion into coin under the lord's seal. Turns refined metal straight into treasury.",
+  },
+  {
+    id: "jeweller", displayName: "Jeweller", category: "luxury", tierMin: "city",
+    popCost: 2, buildCoinCost: 250, buildTimeDays: 4, outputFromBuildings: true,
+    description: "Works precious metal and true-silver into jewellery for the great houses and foreign courts.",
+  },
   {
     id: "library", displayName: "Library", category: "luxury", tierMin: "town",
     popCost: 2, buildCoinCost: 200, buildTimeDays: 4, upkeepCoinDaily: 1, maxPerSettlement: 1,
@@ -573,6 +678,50 @@ export const buildingTypesCatalogue: BuildingSeed[] = [
   { id: "hearth_hall", displayName: "Hearth Hall", category: "structural", description: "A long hall around a central fire.", provides: ["HEARTH", "TABLE"], quantities: { TABLE: 2 }, minFootprintBlocks: 48, minHeightBlocks: 5 },
   { id: "chapel", displayName: "Chapel", category: "landmark", description: "A small place of reverence.", provides: ["ALTAR"], minHeightBlocks: 7 },
   { id: "well_house", displayName: "Well House", category: "functional", description: "A roofed, drawn well.", provides: ["WELL"] },
+
+  // --- Production buildings (carry building_outputs; output districts scale
+  //     with how many you raise) -----------------------------------------
+  { id: "blast_furnace", displayName: "Blast Furnace", category: "functional", description: "A tall stone stack with bellows, smelting iron to steel under sustained heat.", provides: ["FORGE"], minFootprintBlocks: 30, minHeightBlocks: 9 },
+  { id: "loom", displayName: "Loom House", category: "functional", description: "Warp-weighted looms and fulling-troughs.", provides: ["STORAGE"], minFootprintBlocks: 25 },
+  { id: "tan_pit", displayName: "Tan-Pit Shed", category: "functional", description: "Lime-pits and bark-liquor vats. It smells.", provides: ["STORAGE"], minFootprintBlocks: 30 },
+  { id: "saw_frame", displayName: "Saw-Frame", category: "functional", description: "A water-driven frame-saw and a drying-stack.", provides: ["STORAGE"], minFootprintBlocks: 30 },
+  { id: "fletching_bench", displayName: "Fletching Bench", category: "functional", description: "Shaft-lathes, glue-pots, and a feather-store.", provides: ["STORAGE"] },
+  { id: "brewing_vat", displayName: "Brewing Vat-House", category: "functional", description: "Mash-tuns, a copper, and cool cellars.", provides: ["STORAGE"], minFootprintBlocks: 25 },
+  { id: "kiln", displayName: "Kiln", category: "functional", description: "A wood-fired brick-and-pottery kiln.", provides: [], minHeightBlocks: 6 },
+  { id: "glass_furnace", displayName: "Glass Furnace", category: "functional", description: "A roaring furnace, a blowing-bench, and an annealing-oven.", provides: ["FORGE"], minHeightBlocks: 7 },
+  { id: "jewellers_bench", displayName: "Jeweller's Bench", category: "functional", description: "A goldsmith's bench with crucible, draw-plate, and a strong-box.", provides: ["STORAGE"] },
+  { id: "mint_press", displayName: "Mint Press", category: "functional", description: "Dies and a screw-press striking coin from bullion.", provides: ["STORAGE"] },
+  { id: "warehouse", displayName: "Warehouse", category: "functional", description: "A great bonded store for goods in transit.", provides: ["STORAGE"], quantities: { STORAGE: 4 }, minFootprintBlocks: 60 },
+  { id: "loading_dock", displayName: "Loading Dock", category: "functional", description: "Cranes, weigh-beams, and a carter's yard.", provides: ["STORAGE"] },
+];
+
+// --- Building outputs (per-building daily production) ---------------------
+// A district flagged outputFromBuildings produces the SUM of its buildings'
+// outputs (× tier × density dividend), so more/better buildings = more goods.
+// resourceId null + outputKind 'coin' means a trade margin in coin, not a good.
+
+export const buildingOutputsCatalogue = [
+  // Smithy / foundry.
+  { buildingTypeId: "forge_building", resourceId: "R:Iron_Ingot", dailyAmount: 1, outputKind: "primary" },
+  { buildingTypeId: "forge_building", resourceId: "R:Slag", dailyAmount: 1, outputKind: "byproduct" },
+  { buildingTypeId: "blast_furnace", resourceId: "R:Steel", dailyAmount: 1, outputKind: "primary" },
+  { buildingTypeId: "blast_furnace", resourceId: "R:Slag", dailyAmount: 1, outputKind: "byproduct" },
+  // Bakery.
+  { buildingTypeId: "bakehouse", resourceId: "R:Bread", dailyAmount: 4, outputKind: "primary" },
+  { buildingTypeId: "great_bakehouse", resourceId: "R:Bread", dailyAmount: 8, outputKind: "primary" },
+  // New chains.
+  { buildingTypeId: "loom", resourceId: "R:Cloth", dailyAmount: 2, outputKind: "primary" },
+  { buildingTypeId: "tan_pit", resourceId: "R:Leather", dailyAmount: 2, outputKind: "primary" },
+  { buildingTypeId: "saw_frame", resourceId: "R:Planks", dailyAmount: 3, outputKind: "primary" },
+  { buildingTypeId: "fletching_bench", resourceId: "R:Arrows", dailyAmount: 4, outputKind: "primary" },
+  { buildingTypeId: "brewing_vat", resourceId: "R:Ale", dailyAmount: 3, outputKind: "primary" },
+  { buildingTypeId: "kiln", resourceId: "R:Brick", dailyAmount: 3, outputKind: "primary" },
+  { buildingTypeId: "glass_furnace", resourceId: "R:Glass", dailyAmount: 2, outputKind: "primary" },
+  { buildingTypeId: "jewellers_bench", resourceId: "R:Jewellery", dailyAmount: 1, outputKind: "primary" },
+  // Coin (trade margin).
+  { buildingTypeId: "mint_press", resourceId: null, dailyAmount: 8, outputKind: "coin" },
+  { buildingTypeId: "warehouse", resourceId: null, dailyAmount: 6, outputKind: "coin" },
+  { buildingTypeId: "loading_dock", resourceId: null, dailyAmount: 4, outputKind: "coin" },
 ];
 
 // --- Building tags (verifiable themes) -----------------------------------
@@ -601,6 +750,18 @@ export const buildingTagsCatalogue = [
   { buildingTypeId: "market_stalls", tag: "theme:mercantile" },
   { buildingTypeId: "flour_mill", tag: "mill" },
   { buildingTypeId: "watermill", tag: "mill" },
+  { buildingTypeId: "blast_furnace", tag: "theme:industrial" },
+  { buildingTypeId: "loom", tag: "theme:industrial" },
+  { buildingTypeId: "tan_pit", tag: "theme:industrial" },
+  { buildingTypeId: "saw_frame", tag: "theme:industrial" },
+  { buildingTypeId: "brewing_vat", tag: "theme:industrial" },
+  { buildingTypeId: "kiln", tag: "theme:industrial" },
+  { buildingTypeId: "glass_furnace", tag: "theme:industrial" },
+  { buildingTypeId: "fletching_bench", tag: "theme:martial" },
+  { buildingTypeId: "jewellers_bench", tag: "theme:luxury" },
+  { buildingTypeId: "mint_press", tag: "theme:luxury" },
+  { buildingTypeId: "warehouse", tag: "theme:mercantile" },
+  { buildingTypeId: "loading_dock", tag: "theme:mercantile" },
 ];
 
 // --- District required buildings ------------------------------------------
@@ -622,14 +783,25 @@ export type RequiredBuildingSeed = {
 export const districtRequiredBuildingsCatalogue: RequiredBuildingSeed[] = [
   { districtTypeId: "wheat_farm", kind: "specific", buildingTypeId: "granary", count: 1, themeNote: null },
   // A bakery's mill slot accepts EITHER a wind Flour Mill OR a Watermill.
+  // Output districts: the OUTPUT building is the ranged slot (count..maxCount,
+  // each one adds to the daily yield); fixed co-buildings just gate it.
   { districtTypeId: "bakery", kind: "specific", buildingTypeId: "flour_mill", count: 1, themeNote: null, groupKey: "mill" },
   { districtTypeId: "bakery", kind: "specific", buildingTypeId: "watermill", count: 1, themeNote: null, groupKey: "mill" },
-  { districtTypeId: "bakery", kind: "specific", buildingTypeId: "bakehouse", count: 1, themeNote: null },
-  { districtTypeId: "bakery", kind: "themed", buildingTypeId: null, count: 2, themeNote: "bakery-themed", themeTag: "theme:bakery" },
-  { districtTypeId: "smithy", kind: "specific", buildingTypeId: "forge_building", count: 1, themeNote: null },
+  { districtTypeId: "bakery", kind: "specific", buildingTypeId: "bakehouse", count: 1, maxCount: 3, themeNote: null },
+  { districtTypeId: "smithy", kind: "specific", buildingTypeId: "forge_building", count: 1, maxCount: 3, themeNote: null },
   { districtTypeId: "smithy", kind: "specific", buildingTypeId: "anvil_shed", count: 1, themeNote: null },
-  { districtTypeId: "foundry", kind: "specific", buildingTypeId: "forge_building", count: 2, themeNote: null },
+  { districtTypeId: "foundry", kind: "specific", buildingTypeId: "blast_furnace", count: 1, maxCount: 3, themeNote: null },
   { districtTypeId: "foundry", kind: "specific", buildingTypeId: "anvil_shed", count: 1, themeNote: null },
+  { districtTypeId: "sawmill", kind: "specific", buildingTypeId: "saw_frame", count: 1, maxCount: 3, themeNote: null },
+  { districtTypeId: "tannery", kind: "specific", buildingTypeId: "tan_pit", count: 1, maxCount: 3, themeNote: null },
+  { districtTypeId: "weavers_mill", kind: "specific", buildingTypeId: "loom", count: 1, maxCount: 3, themeNote: null },
+  { districtTypeId: "brewery", kind: "specific", buildingTypeId: "brewing_vat", count: 1, maxCount: 3, themeNote: null },
+  { districtTypeId: "kiln_yard", kind: "specific", buildingTypeId: "kiln", count: 1, maxCount: 3, themeNote: null },
+  { districtTypeId: "fletcher", kind: "specific", buildingTypeId: "fletching_bench", count: 1, maxCount: 2, themeNote: null },
+  { districtTypeId: "glassworks", kind: "specific", buildingTypeId: "glass_furnace", count: 1, maxCount: 2, themeNote: null },
+  { districtTypeId: "mint", kind: "specific", buildingTypeId: "mint_press", count: 1, maxCount: 2, themeNote: null },
+  { districtTypeId: "jeweller", kind: "specific", buildingTypeId: "jewellers_bench", count: 1, maxCount: 2, themeNote: null },
+  { districtTypeId: "trade_warehouse", kind: "specific", buildingTypeId: "warehouse", count: 1, maxCount: 4, themeNote: null },
   { districtTypeId: "barracks", kind: "specific", buildingTypeId: "bunkhouse", count: 2, themeNote: null },
   { districtTypeId: "barracks", kind: "specific", buildingTypeId: "tower_armoury", count: 1, themeNote: null },
   { districtTypeId: "stables", kind: "specific", buildingTypeId: "stable_block", count: 2, maxCount: 4, themeNote: null },
@@ -696,6 +868,18 @@ export const districtScaleBonusesCatalogue = [
   // A couple of non-residential examples (the mechanic is general).
   { districtTypeId: "market", bonusType: "tax_yield_pct", perBuilding: 3, note: "More stalls, more tolls at the weigh-house." },
   { districtTypeId: "stables", bonusType: "output_pct", perBuilding: 4, note: "A larger yard breaks more mounts at once." },
+  // Industrial districts: a fuller workshop is more than the sum of its
+  // benches — shared tools, banked fires, and apprentices lift every unit.
+  { districtTypeId: "smithy", bonusType: "output_pct", perBuilding: 4, note: "Banked fires and shared stock between the forges." },
+  { districtTypeId: "foundry", bonusType: "output_pct", perBuilding: 4, note: "" },
+  { districtTypeId: "weavers_mill", bonusType: "output_pct", perBuilding: 3, note: "" },
+  { districtTypeId: "tannery", bonusType: "output_pct", perBuilding: 3, note: "" },
+  { districtTypeId: "sawmill", bonusType: "output_pct", perBuilding: 3, note: "" },
+  { districtTypeId: "brewery", bonusType: "output_pct", perBuilding: 3, note: "" },
+  { districtTypeId: "kiln_yard", bonusType: "output_pct", perBuilding: 3, note: "" },
+  { districtTypeId: "glassworks", bonusType: "output_pct", perBuilding: 4, note: "" },
+  { districtTypeId: "bakery", bonusType: "output_pct", perBuilding: 3, note: "Shared ovens hold their heat between bakes." },
+  { districtTypeId: "trade_warehouse", bonusType: "output_pct", perBuilding: 3, note: "A bigger depot turns goods faster." },
 ];
 
 // --- District required components -----------------------------------------
@@ -933,11 +1117,29 @@ export const districtConsumesCatalogue = [
   { districtTypeId: "smithy", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
   { districtTypeId: "foundry", tagId: "T:Metal", weightMin: 2, dailyAmount: 1 },
   { districtTypeId: "foundry", tagId: "T:Fuel", weightMin: 2, dailyAmount: 2 },
+  // New chains. For outputFromBuildings districts these amounts are PER
+  // production building (a 3-forge smithy draws 3× ore), so input scales
+  // with output.
+  { districtTypeId: "sawmill", tagId: "T:Building", weightMin: 2, dailyAmount: 2 },
+  { districtTypeId: "tannery", tagId: "T:Rawhide", weightMin: 1, dailyAmount: 1 },
+  { districtTypeId: "weavers_mill", tagId: "T:Cloth", weightMin: 2, dailyAmount: 1 },
+  { districtTypeId: "brewery", tagId: "T:Grain", weightMin: 1, dailyAmount: 1 },
+  { districtTypeId: "kiln_yard", tagId: "T:ClayRaw", weightMin: 1, dailyAmount: 1 },
+  { districtTypeId: "kiln_yard", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
+  { districtTypeId: "fletcher", tagId: "T:Timber", weightMin: 2, dailyAmount: 1 },
+  { districtTypeId: "glassworks", tagId: "T:GlassRaw", weightMin: 1, dailyAmount: 1 },
+  { districtTypeId: "glassworks", tagId: "T:Fuel", weightMin: 1, dailyAmount: 1 },
+  { districtTypeId: "mint", tagId: "T:Metal", weightMin: 2, dailyAmount: 2 },
+  { districtTypeId: "jeweller", tagId: "T:Metal_Ore", weightMin: 3, dailyAmount: 1 },
 ];
 
 // --- District produces (base, resource-based) ----------------------------
 // Biome outputs above override these per-tile where they match.
 
+// NOTE: districts flagged outputFromBuildings (smithy, foundry, bakery, and
+// the new industrial chains) do NOT list a flat produce here — their output
+// is the sum of their production buildings (buildingOutputsCatalogue). Only
+// tile-based extraction/agriculture has a flat per-district yield.
 export const districtProducesCatalogue = [
   { districtTypeId: "wheat_farm", resourceId: "R:Wheat", dailyAmount: 4 },
   { districtTypeId: "logging_camp", resourceId: "R:Wood", dailyAmount: 3 },
@@ -945,12 +1147,12 @@ export const districtProducesCatalogue = [
   { districtTypeId: "iron_mine", resourceId: "R:Iron_Ore", dailyAmount: 2 },
   { districtTypeId: "mithril_mine", resourceId: "R:Mithril_Ore", dailyAmount: 1 },
   { districtTypeId: "mallorn_grove", resourceId: "R:Mallorn", dailyAmount: 1 },
-  { districtTypeId: "bakery", resourceId: "R:Bread", dailyAmount: 8 },
   { districtTypeId: "charcoal_burner", resourceId: "R:Charcoal", dailyAmount: 2 },
-  { districtTypeId: "smithy", resourceId: "R:Iron_Ingot", dailyAmount: 1 },
-  // Byproduct: every smelt leaves slag. Low value, but not nothing.
-  { districtTypeId: "smithy", resourceId: "R:Slag", dailyAmount: 1, outputKind: "byproduct" },
-  { districtTypeId: "foundry", resourceId: "R:Steel", dailyAmount: 1 },
+  // New tile-based extraction / herding.
+  { districtTypeId: "pasture", resourceId: "R:Wool", dailyAmount: 3 },
+  { districtTypeId: "pasture", resourceId: "R:Hide", dailyAmount: 2, outputKind: "byproduct" },
+  { districtTypeId: "clay_pit", resourceId: "R:Clay", dailyAmount: 4 },
+  { districtTypeId: "sand_pit", resourceId: "R:Sand", dailyAmount: 4 },
 ];
 
 // --- Conditional production bonuses (the spec's bonuses_from) -------------

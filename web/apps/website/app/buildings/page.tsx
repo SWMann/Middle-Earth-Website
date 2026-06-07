@@ -6,6 +6,7 @@ import {
   getBuildingDistrictUsage,
   getAllBuildingTags,
   getAllBuildingVariantLinks,
+  getAllBuildingOutputs,
 } from "@/lib/data/catalogue";
 
 export const revalidate = 600;
@@ -50,7 +51,7 @@ function footprint(min: number | null, max: number | null): string | null {
 }
 
 export default async function BuildingsIndexPage() {
-  const [buildings, components, links, usage, tags, variants] =
+  const [buildings, components, links, usage, tags, variants, outputs] =
     await Promise.all([
       getAllBuildingTypes(),
       getAllFunctionalComponents(),
@@ -58,7 +59,22 @@ export default async function BuildingsIndexPage() {
       getBuildingDistrictUsage(),
       getAllBuildingTags(),
       getAllBuildingVariantLinks(),
+      getAllBuildingOutputs(),
     ]);
+
+  const outputsByBuilding = new Map<
+    string,
+    { name: string; amount: number; kind: string }[]
+  >();
+  for (const o of outputs) {
+    if (!outputsByBuilding.has(o.buildingTypeId))
+      outputsByBuilding.set(o.buildingTypeId, []);
+    outputsByBuilding.get(o.buildingTypeId)!.push({
+      name: o.resourceName ?? "coin",
+      amount: o.dailyAmount,
+      kind: o.outputKind,
+    });
+  }
 
   const providesByBuilding = new Map<
     string,
@@ -160,6 +176,7 @@ export default async function BuildingsIndexPage() {
                 const usedBy = usageByBuilding.get(b.id) ?? [];
                 const bTags = tagsByBuilding.get(b.id) ?? [];
                 const bVariants = variantsByBuilding.get(b.id) ?? [];
+                const bOutputs = outputsByBuilding.get(b.id) ?? [];
                 const fp = footprint(b.minFootprintBlocks, b.maxFootprintBlocks);
                 return (
                   <li
@@ -199,6 +216,25 @@ export default async function BuildingsIndexPage() {
                       <p className="text-sm opacity-70 mt-1.5">
                         {b.description}
                       </p>
+                    )}
+
+                    {bOutputs.length > 0 && (
+                      <div className="mt-2.5">
+                        <span className="text-[10px] uppercase tracking-widest opacity-50 mr-2">
+                          Produces / day
+                        </span>
+                        <span className="inline-flex flex-wrap gap-1.5 align-middle">
+                          {bOutputs.map((o) => (
+                            <span
+                              key={o.name + o.kind}
+                              className="text-[11px] px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300"
+                            >
+                              +{o.amount} {o.name}
+                              {o.kind !== "primary" ? ` (${o.kind})` : ""}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
                     )}
 
                     {provides.length > 0 && (

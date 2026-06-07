@@ -105,10 +105,21 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
       const own = ownClass[Math.floor(ownClass.length / 2)] ?? ownClass[0];
       return own ? [{ buildingTypeId: own.id, count: slot.min }] : [];
     }
-    // Ranged non-residential (market/stables): the specific required building.
-    const reqRow = catalogue.requiredBuildings.find(
-      (r) => r.districtTypeId === districtTypeId && r.buildingTypeId,
+    // Ranged non-residential (production / market / stables): prefer the
+    // ranged building — for output districts that's the production building
+    // (a Smithy's forge, a Bakery's bakehouse), not a fixed co-building.
+    const rangedRow = catalogue.requiredBuildings.find(
+      (r) =>
+        r.districtTypeId === districtTypeId &&
+        r.buildingTypeId &&
+        r.maxCount != null &&
+        r.maxCount > r.count,
     );
+    const reqRow =
+      rangedRow ??
+      catalogue.requiredBuildings.find(
+        (r) => r.districtTypeId === districtTypeId && r.buildingTypeId,
+      );
     return reqRow?.buildingTypeId
       ? [{ buildingTypeId: reqRow.buildingTypeId, count: slot.min }]
       : [];
@@ -343,9 +354,14 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
                     </div>
                   )}
 
-                  {/* Ranged non-residential (market/stables): single count */}
+                  {/* Ranged non-residential (production / market / stables) */}
                   {!dt.capFromHousing && slot && slot.max > slot.min && (
                     <div className="mt-2">
+                      {dt.outputFromBuildings && (
+                        <p className="text-[10px] opacity-50 mb-1">
+                          Output scales with this building — more = more goods.
+                        </p>
+                      )}
                       {inst.buildings.map((b) => (
                         <Stepper
                           key={b.buildingTypeId}
@@ -358,6 +374,9 @@ export function SettlementPlanner({ catalogue }: { catalogue: PlannerCatalogue }
                           max={slot.max}
                           onChange={(n) =>
                             setBuildingCount(inst.uid, b.buildingTypeId, n)
+                          }
+                          onLabelClick={() =>
+                            setModal({ type: "building", id: b.buildingTypeId })
                           }
                         />
                       ))}
@@ -1099,6 +1118,9 @@ function BuildingModal({
   const cultureName = (cid: string) =>
     catalogue.cultures.find((c) => c.id === cid)?.displayName ?? cid;
   const provides = catalogue.provides.filter((p) => p.buildingTypeId === id);
+  const outputs = catalogue.buildingOutputs.filter((o) => o.buildingTypeId === id);
+  const resName = (rid: string | null) =>
+    rid ? catalogue.resources.find((r) => r.id === rid)?.displayName ?? rid : "coin";
   const tags = catalogue.buildingTags.filter((t) => t.buildingTypeId === id).map((t) => t.tag);
   const variants = catalogue.buildingVariants.filter((v) => v.buildingTypeId === id);
   const usedBy = catalogue.requiredBuildings
@@ -1120,6 +1142,20 @@ function BuildingModal({
       hrefLabel="Open buildings page"
       onClose={onClose}
     >
+      {outputs.length > 0 && (
+        <Block title="Produces / day (each)">
+          {outputs.map((o) => (
+            <Row
+              key={o.id}
+              label={`${resName(o.resourceId)}${o.outputKind !== "primary" ? ` (${o.outputKind})` : ""}`}
+              value={o.outputKind === "coin" ? `+${o.dailyAmount} coin` : `+${o.dailyAmount}`}
+            />
+          ))}
+          <p className="text-[10px] opacity-40 mt-1">
+            Per building — a district&apos;s output is the sum of these.
+          </p>
+        </Block>
+      )}
       {provides.length > 0 && (
         <Block title="Provides">
           <div className="flex flex-wrap gap-1.5">

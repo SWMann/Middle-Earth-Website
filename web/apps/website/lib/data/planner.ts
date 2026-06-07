@@ -26,6 +26,7 @@ export const getPlannerCatalogue = cache(async () => {
     requiredComponents,
     buildingTypes,
     provides,
+    buildingOutputs,
     functionalComponents,
     buildingVariants,
     buildingTags,
@@ -67,6 +68,7 @@ export const getPlannerCatalogue = cache(async () => {
     db.select().from(schema.districtRequiredComponents),
     db.select().from(schema.buildingTypes),
     db.select().from(schema.buildingProvidesComponents),
+    db.select().from(schema.buildingOutputs),
     db
       .select({
         id: schema.functionalComponents.id,
@@ -133,6 +135,7 @@ export const getPlannerCatalogue = cache(async () => {
       beds: bedsByBuilding.get(b.id) ?? 0,
     })),
     provides,
+    buildingOutputs,
     functionalComponents,
     buildingVariants,
     buildingTags,

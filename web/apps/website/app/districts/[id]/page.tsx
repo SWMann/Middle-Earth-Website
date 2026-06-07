@@ -17,6 +17,7 @@ import {
   getDistrictTierOutput,
   getDistrictRecipes,
   getDistrictRequiredBuildings,
+  getBuildingOutputs,
   getDistrictRequiredComponents,
   getTierDecorationThresholds,
   getAllOccupationClasses,
@@ -101,6 +102,23 @@ export default async function DistrictDetailPage({
     reqBuildings.length > 0 ||
     reqComponents.length > 0 ||
     district.decorationThreshold != null;
+
+  // For output-from-buildings districts: the per-building yields of the
+  // production buildings (the district's output is the sum of these).
+  const outputBuildings = district.outputFromBuildings
+    ? await Promise.all(
+        reqBuildings
+          .filter((b) => b.buildingTypeId)
+          .map(async (b) => ({
+            buildingTypeId: b.buildingTypeId!,
+            buildingName: b.buildingName,
+            count: b.count,
+            maxCount: b.maxCount,
+            outputs: await getBuildingOutputs(b.buildingTypeId!),
+          })),
+      )
+    : [];
+  const producingBuildings = outputBuildings.filter((b) => b.outputs.length > 0);
 
   // Collapse rows sharing a groupKey into a single "any one of" slot,
   // preserving first-seen order. Standalone rows (null groupKey) stay alone.
@@ -577,6 +595,52 @@ export default async function DistrictDetailPage({
                     ))}
                   </div>
                 )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ----- Output scales with buildings ----- */}
+      {producingBuildings.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-1">Output scales with buildings</h2>
+          <p className="text-xs opacity-60 mb-4 max-w-2xl">
+            This district&apos;s daily output is the sum of its production
+            buildings — raise more (up to the maximum), and the yield rises with
+            them (then tier-scaled, and lifted further by the density dividend).
+          </p>
+          <ul className="space-y-2 text-sm">
+            {producingBuildings.map((b) => (
+              <li
+                key={b.buildingTypeId}
+                className="rounded border border-stone-200 dark:border-stone-800 p-3"
+              >
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <Link
+                    href={{ pathname: `/buildings`, hash: b.buildingTypeId }}
+                    className="font-medium hover:underline"
+                  >
+                    {b.buildingName}
+                  </Link>
+                  <span className="text-xs text-stone-500">
+                    {b.maxCount && b.maxCount > b.count
+                      ? `${b.count}–${b.maxCount}× per district`
+                      : `${b.count}× per district`}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {b.outputs.map((o) => (
+                    <span
+                      key={o.id}
+                      className="text-[11px] px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300"
+                    >
+                      +{o.dailyAmount}{" "}
+                      {o.resourceName ?? "coin"}
+                      {o.outputKind !== "primary" ? ` (${o.outputKind})` : ""} each
+                    </span>
+                  ))}
+                </div>
               </li>
             ))}
           </ul>
