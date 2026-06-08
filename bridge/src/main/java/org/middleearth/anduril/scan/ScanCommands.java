@@ -165,7 +165,8 @@ public final class ScanCommands {
 
         String scannedBy = player.getGameProfile().getName();
         ScanContext sctx = ScanContext.command(districtType, factionId, cultureId, tier, scannedBy);
-        ScanResult result = scanService.compute(obs, sctx, config, null);
+        // Command/box path: no layout, so building count can't be verified (bv = null).
+        ScanResult result = scanService.compute(obs, sctx, config, null, null);
 
         sendResultFeedback(source, result);
 

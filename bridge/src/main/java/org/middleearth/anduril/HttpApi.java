@@ -8,6 +8,18 @@ import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerWorld;
+import org.middleearth.anduril.scan.ComponentDetector;
+import org.middleearth.anduril.scan.ConfigReader;
+import org.middleearth.anduril.scan.FootprintValidator;
+import org.middleearth.anduril.scan.PlotGeometry;
+import org.middleearth.anduril.scan.PlotRepository;
+import org.middleearth.anduril.scan.PlotScanner;
+import org.middleearth.anduril.scan.ScanConfig;
+import org.middleearth.anduril.scan.ScanContext;
+import org.middleearth.anduril.scan.ScanObservations;
+import org.middleearth.anduril.scan.ScanResult;
+import org.middleearth.anduril.scan.ScanService;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -15,8 +27,15 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Embedded HTTP API for the Andúril bridge mod.
@@ -52,13 +71,22 @@ public class HttpApi {
 
     private final MinecraftServer server;
     private final Database database;
+    private final ConfigReader configReader;
+    private final ScanService scanService;
+    private final PlotScanner plotScanner;
+    private final PlotRepository plotRepository;
     private final byte[] expectedToken; // empty array if not configured
     private final boolean tokenConfigured;
     private Javalin app;
 
-    public HttpApi(MinecraftServer server, Database database) {
+    public HttpApi(MinecraftServer server, Database database, ConfigReader configReader,
+                   ScanService scanService, PlotScanner plotScanner, PlotRepository plotRepository) {
         this.server = server;
         this.database = database;
+        this.configReader = configReader;
+        this.scanService = scanService;
+        this.plotScanner = plotScanner;
+        this.plotRepository = plotRepository;
         String fromEnv = System.getenv(TOKEN_ENV);
         if (fromEnv == null || fromEnv.isBlank()) {
             this.expectedToken = new byte[0];
@@ -705,6 +733,125 @@ public class HttpApi {
             }
         });
 
+        // Protected: scan a saved plot (the floorplanner's companion to the
+        // in-game /anduril scan). Inverted threading vs the command path: load
+        // the plot + config on this Jetty worker (DB is fine off-thread), read
+        // the world on the SERVER thread via server.execute (force-loading the
+        // box's chunks, since the author may be absent), block this worker on a
+        // BOUNDED future.get (Jetty may block; the tick must not), then score /
+        // validate / persist back here. Reuses every scan/ class unchanged.
+        app.post("/api/v1/plots/{id}/scan", ctx -> {
+            long plotId = parseLongOr400(ctx.pathParam("id"));
+
+            String districtType, factionId, label, tier, transformJson, layoutJson;
+            Long settlementId, districtId;
+            Integer popCap;
+            int minX, minY, minZ, maxX, maxY, maxZ;
+            try (Connection conn = database.getConnection()) {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT p.district_type, p.faction_id, p.settlement_id, p.district_id, p.label, " +
+                        "p.min_x, p.min_y, p.min_z, p.max_x, p.max_y, p.max_z, " +
+                        "p.transform::text AS transform, p.layout::text AS layout, " +
+                        "s.tier AS tier, s.population_cap AS pop_cap " +
+                        "FROM game.plots p LEFT JOIN game.settlements s ON s.id = p.settlement_id " +
+                        "WHERE p.id = ?")) {
+                    ps.setLong(1, plotId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (!rs.next()) throw new NotFoundResponse("Plot not found: " + plotId);
+                        districtType = rs.getString("district_type");
+                        factionId = rs.getString("faction_id");
+                        long sid = rs.getLong("settlement_id");
+                        settlementId = rs.wasNull() ? null : sid;
+                        long did = rs.getLong("district_id");
+                        districtId = rs.wasNull() ? null : did;
+                        label = rs.getString("label");
+                        minX = rs.getInt("min_x"); minY = rs.getInt("min_y"); minZ = rs.getInt("min_z");
+                        maxX = rs.getInt("max_x"); maxY = rs.getInt("max_y"); maxZ = rs.getInt("max_z");
+                        transformJson = rs.getString("transform");
+                        layoutJson = rs.getString("layout");
+                        tier = rs.getString("tier");
+                        int pc = rs.getInt("pop_cap");
+                        popCap = rs.wasNull() ? null : pc;
+                    }
+                }
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("DB error loading plot for scan: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
+
+            ScanConfig config = configReader.get();
+            String cultureId = factionId != null ? config.factionCulture().get(factionId) : null;
+            Set<String> cultureBlocks = cultureId != null ? config.culturePalettes().get(cultureId) : null;
+            ComponentDetector detector = new ComponentDetector(config);
+
+            PlotGeometry.Transform transform;
+            List<PlotGeometry.LayoutBuilding> buildings;
+            try {
+                transform = transformJson == null ? null : PlotGeometry.Transform.from(JSON.readTree(transformJson));
+                buildings = layoutJson == null ? List.of() : PlotGeometry.buildingsFrom(JSON.readTree(layoutJson));
+            } catch (Exception e) {
+                throw new BadRequestResponse("Stored transform/layout is not valid JSON: " + e.getMessage());
+            }
+            final boolean verifyBuildings = transform != null && !buildings.isEmpty();
+
+            // Read the world on the server thread.
+            final int fMinX = minX, fMinY = minY, fMinZ = minZ, fMaxX = maxX, fMaxY = maxY, fMaxZ = maxZ;
+            final PlotGeometry.Transform fTransform = transform;
+            final List<PlotGeometry.LayoutBuilding> fBuildings = buildings;
+            CompletableFuture<Observed> future = new CompletableFuture<>();
+            server.execute(() -> {
+                try {
+                    ServerWorld world = server.getOverworld();
+                    forceLoadChunks(world, fMinX, fMinZ, fMaxX, fMaxZ);
+                    ScanObservations obs = plotScanner.observe(
+                        world, fMinX, fMinY, fMinZ, fMaxX, fMaxY, fMaxZ, config, detector, cultureBlocks);
+                    Map<String, Map<String, Integer>> perBuilding = verifyBuildings
+                        ? plotScanner.observeBuildings(world, fBuildings, fTransform, fMinY, fMaxY, detector)
+                        : null;
+                    future.complete(new Observed(obs, perBuilding));
+                } catch (Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+
+            Observed observed;
+            try {
+                observed = future.get(15, TimeUnit.SECONDS);
+            } catch (TimeoutException te) {
+                ctx.status(504).result("Scan timed out — server thread busy. Try again.");
+                return;
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Scan interrupted", ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof IllegalArgumentException) {
+                    throw new BadRequestResponse(cause.getMessage());
+                }
+                Anduril.LOGGER.error("World read failed during scan: {}", String.valueOf(cause), cause);
+                throw new RuntimeException("Scan failed during world read", cause);
+            }
+
+            FootprintValidator.BuildingVerification bv = observed.perBuilding() == null
+                ? null
+                : buildVerification(fBuildings, observed.perBuilding(), config.buildingProvides());
+
+            ScanContext sctx = new ScanContext(
+                districtType, factionId, cultureId, settlementId, districtId, tier,
+                "http", label == null ? "" : label, "http", bv != null);
+            ScanResult result = scanService.compute(observed.obs(), sctx, config, popCap, bv);
+
+            try {
+                PlotRepository.PersistResult pr = plotRepository.updateScan(plotId, result);
+                ctx.json(new ScanPlotResponse(
+                    plotId, result.decorationScore(), result.reviewStatus(),
+                    result.reviewMode(), pr.auditEventId()));
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("DB error saving scan: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
+        });
+
         // Protected: Postgres connectivity status. Useful for ops to confirm
         // the bridge has DB without needing to read server logs.
         app.get("/api/v1/admin/db-info", ctx -> {
@@ -808,6 +955,45 @@ public class HttpApi {
         }
     }
 
+    /** Force-load every chunk the scan box touches (the author may be absent). */
+    private static void forceLoadChunks(ServerWorld world, int minX, int minZ, int maxX, int maxZ) {
+        int cx0 = minX >> 4, cx1 = maxX >> 4, cz0 = minZ >> 4, cz1 = maxZ >> 4;
+        for (int cx = cx0; cx <= cx1; cx++) {
+            for (int cz = cz0; cz <= cz1; cz++) {
+                world.getChunk(cx, cz);
+            }
+        }
+    }
+
+    /**
+     * A declared building is verified iff every component it should provide
+     * (config.building_provides_components) was actually found in its
+     * sub-region. Buildings with no declared components are trusted as placed.
+     */
+    private static FootprintValidator.BuildingVerification buildVerification(
+            List<PlotGeometry.LayoutBuilding> buildings,
+            Map<String, Map<String, Integer>> perBuilding,
+            Map<String, Map<String, Integer>> buildingProvides) {
+        int verified = 0;
+        Map<String, Integer> byType = new HashMap<>();
+        for (PlotGeometry.LayoutBuilding b : buildings) {
+            Map<String, Integer> found = perBuilding.getOrDefault(b.uid(), Map.of());
+            Map<String, Integer> req = buildingProvides.getOrDefault(b.buildingTypeId(), Map.of());
+            boolean ok = true;
+            for (Map.Entry<String, Integer> e : req.entrySet()) {
+                if (found.getOrDefault(e.getKey(), 0) < e.getValue()) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) {
+                verified++;
+                byType.merge(b.buildingTypeId(), 1, Integer::sum);
+            }
+        }
+        return new FootprintValidator.BuildingVerification(verified, byType);
+    }
+
     private static void validateReview(PlotReviewRequest req) {
         if (req == null) {
             throw new BadRequestResponse("Body required");
@@ -881,6 +1067,18 @@ public class HttpApi {
 
     /** Response body — the new plot id and the audit row id. */
     public record SavePlotResponse(long plotId, long auditEventId) {}
+
+    /** Internal carrier across the server-thread → worker boundary. */
+    private record Observed(ScanObservations obs, Map<String, Map<String, Integer>> perBuilding) {}
+
+    /** Response body for POST /api/v1/plots/{id}/scan. */
+    public record ScanPlotResponse(
+        long plotId,
+        int decorationScore,
+        String reviewStatus,
+        String reviewMode,
+        long auditEventId
+    ) {}
 
     /** Request body for POST /api/v1/plots/{id}/review. */
     public record PlotReviewRequest(String decision, String reviewedBy, String note) {}

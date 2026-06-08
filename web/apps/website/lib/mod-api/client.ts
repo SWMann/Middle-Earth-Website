@@ -24,6 +24,7 @@ import type {
   PlotReviewResponse,
   SavePlotRequest,
   SavePlotResponse,
+  ScanPlotResponse,
 } from "@modspec/api-types";
 import { MockModApiError, mockRedeemLinkCode } from "./mock";
 
@@ -176,6 +177,24 @@ export async function savePlot(req: SavePlotRequest): Promise<SavePlotResponse> 
     });
   }
   return await modPost<SavePlotResponse>(`/plots`, req);
+}
+
+/**
+ * Trigger an in-world scan of a saved plot. The bridge reads the plot's world
+ * box on the MC server thread (force-loading chunks), scores + validates it,
+ * and writes the result back to game.plots. No request body.
+ */
+export async function requestPlotScan(plotId: number): Promise<ScanPlotResponse> {
+  if (shouldMock()) {
+    throw new ModApiError(503, {
+      title: "Bridge mock doesn't implement requestPlotScan",
+      status: 503,
+      detail:
+        "Set MOD_API_URL to the running Andúril bridge and MOD_API_MOCK=0 to use this action. " +
+        `Current env: ${mockDiagnostic()}`,
+    });
+  }
+  return await modPost<ScanPlotResponse>(`/plots/${plotId}/scan`, {});
 }
 
 async function modPost<T>(path: string, body: unknown): Promise<T> {

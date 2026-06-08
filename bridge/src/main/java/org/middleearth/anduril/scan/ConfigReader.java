@@ -157,14 +157,28 @@ public final class ConfigReader {
         Map<String, List<ScanConfig.ReqBuilding>> reqBld = new HashMap<>();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(
-                 "SELECT district_type_id, COALESCE(group_key, building_type_id, theme_tag, kind) AS slot_key, " +
+                 "SELECT district_type_id, building_type_id, " +
+                 "COALESCE(group_key, building_type_id, theme_tag, kind) AS slot_key, " +
                  "count, max_count, optional FROM config.district_required_buildings")) {
             while (rs.next()) {
                 int mc = rs.getInt("max_count");
                 Integer maxCount = rs.wasNull() ? null : mc;
                 reqBld.computeIfAbsent(rs.getString("district_type_id"), k -> new ArrayList<>())
                     .add(new ScanConfig.ReqBuilding(
-                        rs.getString("slot_key"), rs.getInt("count"), maxCount, rs.getBoolean("optional")));
+                        rs.getString("slot_key"), rs.getString("building_type_id"),
+                        rs.getInt("count"), maxCount, rs.getBoolean("optional")));
+            }
+        }
+
+        // building_type_id → (component_id → quantity) for B.5 building verify.
+        Map<String, Map<String, Integer>> buildingProvides = new HashMap<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(
+                 "SELECT building_type_id, component_id, quantity FROM config.building_provides_components")) {
+            while (rs.next()) {
+                buildingProvides
+                    .computeIfAbsent(rs.getString("building_type_id"), k -> new HashMap<>())
+                    .put(rs.getString("component_id"), rs.getInt("quantity"));
             }
         }
         try (PreparedStatement ps = conn.prepareStatement(
@@ -186,7 +200,7 @@ public final class ConfigReader {
         }
 
         return new ScanConfig(weights, tiers, rules, blockTier, decorative,
-            palettes, factionCulture, districts);
+            palettes, factionCulture, districts, buildingProvides);
     }
 
     private static Integer nullableInt(ResultSet rs, String col) throws SQLException {

@@ -126,6 +126,80 @@ public final class PlotRepository {
         }
     }
 
+    /**
+     * Update an existing plot row with fresh scan results (the HTTP/floorplan
+     * path re-scans a saved plot rather than inserting a new one). Same
+     * transaction shape as {@link #persist}: write results, audit, conditional
+     * district activation.
+     */
+    public PersistResult updateScan(long plotId, ScanResult r) throws SQLException {
+        ScanContext ctx = r.ctx();
+        String breakdownJson = write(r.criteriaBreakdown());
+        String componentJson = write(r.componentValidation());
+        String footprintJson = write(r.footprintValidation());
+
+        try (Connection conn = database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement up = conn.prepareStatement(
+                        "UPDATE game.plots SET decoration_score = ?, " +
+                        "criteria_breakdown = CAST(? AS jsonb), component_result = CAST(? AS jsonb), " +
+                        "footprint_result = CAST(? AS jsonb), review_status = ?, review_mode = ?, " +
+                        "scanned_at = NOW(), updated_at = NOW() WHERE id = ?")) {
+                    up.setInt(1, r.decorationScore());
+                    up.setString(2, breakdownJson);
+                    up.setString(3, componentJson);
+                    up.setString(4, footprintJson);
+                    up.setString(5, r.reviewStatus());
+                    up.setString(6, r.reviewMode());
+                    up.setLong(7, plotId);
+                    if (up.executeUpdate() == 0) {
+                        throw new SQLException("Plot not found for scan update: " + plotId);
+                    }
+                }
+
+                long eventId;
+                try (PreparedStatement ins = conn.prepareStatement(
+                        "INSERT INTO audit.events " +
+                        "(event_type, faction_id, visibility, payload, occurred_at) " +
+                        "VALUES (?, ?, ?, CAST(? AS jsonb), NOW()) RETURNING id")) {
+                    ins.setString(1, "PLOT_SCANNED");
+                    ins.setString(2, ctx.factionId());
+                    ins.setString(3, "admin");
+                    ins.setString(4, write(auditPayload(r, plotId)));
+                    try (ResultSet rs = ins.executeQuery()) {
+                        rs.next();
+                        eventId = rs.getLong(1);
+                    }
+                }
+
+                try (PreparedStatement up = conn.prepareStatement(
+                        "UPDATE game.plots SET scan_audit_event_id = ? WHERE id = ?")) {
+                    up.setLong(1, eventId);
+                    up.setLong(2, plotId);
+                    up.executeUpdate();
+                }
+
+                if (TierGate.AUTO_APPROVED.equals(r.reviewStatus()) && ctx.districtId() != null) {
+                    try (PreparedStatement up = conn.prepareStatement(
+                            "UPDATE game.districts SET active = 'true' WHERE id = ?")) {
+                        up.setLong(1, ctx.districtId());
+                        up.executeUpdate();
+                    }
+                }
+
+                conn.commit();
+                Anduril.LOGGER.info(
+                    "PLOT_SCANNED (rescan): plot #{} ({} score {} → {}, event {})",
+                    plotId, ctx.districtType(), r.decorationScore(), r.reviewStatus(), eventId);
+                return new PersistResult(plotId, eventId);
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            }
+        }
+    }
+
     private Map<String, Object> auditPayload(ScanResult r, long plotId) {
         ScanContext ctx = r.ctx();
         ScanObservations o = r.observations();

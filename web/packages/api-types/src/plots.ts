@@ -58,3 +58,17 @@ export type SavePlotResponse = {
   plotId: number;
   auditEventId: number;
 };
+
+/**
+ * Trigger an in-world scan of a saved plot (no request body — the plot id is
+ * in the path). The bridge reads the plot's world box on the server thread,
+ * scores + validates it (verifying building count from the saved layout), and
+ * writes the result back to game.plots.
+ */
+export type ScanPlotResponse = {
+  plotId: number;
+  decorationScore: number;
+  reviewStatus: string;
+  reviewMode: string;
+  auditEventId: number;
+};

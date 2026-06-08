@@ -14,12 +14,13 @@ public final class ScanService {
     private final FootprintValidator footprintValidator = new FootprintValidator();
     private final TierGate tierGate = new TierGate();
 
-    public ScanResult compute(ScanObservations obs, ScanContext ctx, ScanConfig cfg, Integer popCap) {
+    public ScanResult compute(ScanObservations obs, ScanContext ctx, ScanConfig cfg, Integer popCap,
+                              FootprintValidator.BuildingVerification bv) {
         ScanConfig.DistrictSpec spec = cfg.districts().get(ctx.districtType());
 
         DecorationScorer.Scored scored = scorer.score(obs, cfg, spec);
         ScanResult.ComponentValidation comp = componentValidator.validate(obs, spec, popCap);
-        ScanResult.FootprintValidation foot = footprintValidator.validate(obs, spec, ctx.hasLayout());
+        ScanResult.FootprintValidation foot = footprintValidator.validate(obs, spec, bv);
         TierGate.GateResult gate = tierGate.resolve(scored.total(), ctx.tier(), cfg, spec, comp, foot);
 
         return new ScanResult(

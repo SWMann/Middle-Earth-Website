@@ -12,7 +12,7 @@ import {
   projectFootprint,
   solveTransform,
 } from "@/lib/plots/geometry";
-import { savePlotAction, type SaveResult } from "./actions";
+import { savePlotAction, scanPlotAction, type SaveResult, type ScanResult } from "./actions";
 import type { SavePlotRequest } from "@modspec/api-types";
 
 type Tool = "footprint" | "erase" | "building" | "georef";
@@ -60,6 +60,8 @@ export function FloorplanEditor({ catalogue }: { catalogue: FloorplanCatalogue }
   const [draftRect, setDraftRect] = useState<{ x: number; z: number; w: number; h: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 
   const dragMode = useRef<null | "add" | "remove">(null);
   const buildStart = useRef<Cell | null>(null);
@@ -208,9 +210,18 @@ export function FloorplanEditor({ catalogue }: { catalogue: FloorplanCatalogue }
       layout: layout as unknown as Record<string, unknown>,
     };
     setSaving(true);
+    setScanResult(null);
     const res = await savePlotAction(req);
     setSaving(false);
     setSaveResult(res);
+  }
+
+  async function scanNow(plotId: number) {
+    setScanResult(null);
+    setScanning(true);
+    const res = await scanPlotAction(plotId);
+    setScanning(false);
+    setScanResult(res);
   }
 
   function reset() {
@@ -477,10 +488,28 @@ export function FloorplanEditor({ catalogue }: { catalogue: FloorplanCatalogue }
             >
               {saving ? "Saving…" : "Save plot to bridge"}
             </button>
-            {saveResult?.ok && (
-              <p className="rounded border border-emerald-600/40 bg-emerald-500/10 p-2 text-xs">
-                Saved as plot #{saveResult.plotId}. Scan it (in-game or via Phase E) to score it.
-              </p>
+            {saveResult?.ok && saveResult.plotId != null && (
+              <div className="space-y-2 rounded border border-emerald-600/40 bg-emerald-500/10 p-2 text-xs">
+                <p>Saved as plot #{saveResult.plotId}.</p>
+                <button
+                  onClick={() => scanNow(saveResult.plotId!)}
+                  disabled={scanning}
+                  className="w-full rounded border border-emerald-600 px-3 py-1.5 font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/10 disabled:opacity-50"
+                >
+                  {scanning ? "Scanning in-world…" : "Scan now (in-world)"}
+                </button>
+                {scanResult?.ok && (
+                  <p>
+                    Scored <strong>{scanResult.score}/100</strong> → {scanResult.status}.{" "}
+                    {(scanResult.status === "pending_spot" || scanResult.status === "pending_full") && (
+                      <Link href={{ pathname: "/admin/reviews" }} className="underline">
+                        review queue
+                      </Link>
+                    )}
+                  </p>
+                )}
+                {scanResult?.error && <p className="text-red-600 dark:text-red-400">{scanResult.error}</p>}
+              </div>
             )}
             {saveResult?.error && (
               <p className="text-xs text-red-600 dark:text-red-400">{saveResult.error}</p>

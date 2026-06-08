@@ -30,7 +30,9 @@ public record ScanConfig(
     /** factionId → cultureId (game.factions.culture_id). */
     Map<String, String> factionCulture,
     /** districtTypeId → its validation spec (config.district_types + children). */
-    Map<String, DistrictSpec> districts
+    Map<String, DistrictSpec> districts,
+    /** buildingTypeId → (componentId → quantity) it should provide (B.5 verify). */
+    Map<String, Map<String, Integer>> buildingProvides
 ) {
     /** A row of config.tier_decoration_thresholds. */
     public record TierThreshold(Integer minScore, String reviewMode) {}
@@ -42,7 +44,7 @@ public record ScanConfig(
     public record ReqComponent(String componentId, int count, boolean perCap) {}
 
     /** A required-building slot for a district (the non-optional ones gate completion). */
-    public record ReqBuilding(String slotKey, int count, Integer maxCount, boolean optional) {}
+    public record ReqBuilding(String slotKey, String buildingTypeId, int count, Integer maxCount, boolean optional) {}
 
     /**
      * Everything the scorer + validators need about one district type:

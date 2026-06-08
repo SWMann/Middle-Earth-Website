@@ -6,7 +6,10 @@ import net.minecraft.registry.Registries;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -93,5 +96,37 @@ public final class PlotScanner {
         }
 
         return acc.build();
+    }
+
+    /**
+     * Per-building component counts (B.5): for each declared building in a
+     * floorplanner layout, read its world sub-region and tally the components
+     * found, so {@link FootprintValidator} can confirm the building is really
+     * there before counting it. Server-thread only, same as {@link #observe}.
+     *
+     * @return building uid → (componentId → count)
+     */
+    public Map<String, Map<String, Integer>> observeBuildings(
+            ServerWorld world, List<PlotGeometry.LayoutBuilding> buildings,
+            PlotGeometry.Transform t, int minY, int maxY, ComponentDetector detector) {
+        Map<String, Map<String, Integer>> out = new HashMap<>();
+        for (PlotGeometry.LayoutBuilding b : buildings) {
+            int[] box = b.worldBox(t); // minX, minZ, maxX, maxZ
+            Map<String, Integer> counts = new HashMap<>();
+            long vol = (long) (box[2] - box[0] + 1) * (maxY - minY + 1) * (box[3] - box[1] + 1);
+            if (vol <= MAX_VOLUME) {
+                for (BlockPos pos : BlockPos.iterate(box[0], minY, box[1], box[2], maxY, box[3])) {
+                    BlockState state = world.getBlockState(pos);
+                    if (state.isAir()) continue;
+                    Block block = state.getBlock();
+                    String id = Registries.BLOCK.getId(block).toString();
+                    for (String c : detector.match(block, state, id)) {
+                        counts.merge(c, 1, Integer::sum);
+                    }
+                }
+            }
+            out.put(b.uid(), counts);
+        }
+        return out;
     }
 }

@@ -59,8 +59,27 @@ public class AndurilServer implements DedicatedServerModInitializer {
             // is worse than refusing to boot.
             throw new RuntimeException("Andúril DB init failed", e);
         }
+        // Decoration scanner components — shared by the in-game /anduril
+        // command and the HTTP /plots/{id}/scan endpoint. A dedicated IO pool
+        // keeps Neon writes off the tick; a cached ConfigReader keeps the hot
+        // path in memory; the /anduril command registers during world load
+        // (after this event).
+        scanIo = Executors.newFixedThreadPool(2, r -> {
+            Thread t = new Thread(r, "anduril-scan-io");
+            t.setDaemon(true);
+            return t;
+        });
+        configReader = new ConfigReader(database);
+        ScanService scanService = new ScanService();
+        PlotScanner plotScanner = new PlotScanner();
+        PlotRepository plotRepository = new PlotRepository(database);
+        ScanCommands scanCommands = new ScanCommands(
+            server, configReader, scanService, plotScanner, plotRepository, scanIo);
+        CommandRegistrationCallback.EVENT.register(
+            (dispatcher, registryAccess, environment) -> scanCommands.register(dispatcher));
+
         try {
-            httpApi = new HttpApi(server, database);
+            httpApi = new HttpApi(server, database, configReader, scanService, plotScanner, plotRepository);
             httpApi.start();
         } catch (Exception e) {
             Anduril.LOGGER.error("Failed to start Andúril HTTP API: {}", e.getMessage(), e);
@@ -68,20 +87,6 @@ public class AndurilServer implements DedicatedServerModInitializer {
             // the website will see "bridge offline" until we restart.
         }
 
-        // Decoration scanner: a dedicated IO pool keeps Neon writes off the
-        // tick, a cached ConfigReader keeps the hot path in memory, and the
-        // /anduril command registers during world load (after this event).
-        scanIo = Executors.newFixedThreadPool(2, r -> {
-            Thread t = new Thread(r, "anduril-scan-io");
-            t.setDaemon(true);
-            return t;
-        });
-        configReader = new ConfigReader(database);
-        ScanCommands scanCommands = new ScanCommands(
-            server, configReader, new ScanService(), new PlotScanner(),
-            new PlotRepository(database), scanIo);
-        CommandRegistrationCallback.EVENT.register(
-            (dispatcher, registryAccess, environment) -> scanCommands.register(dispatcher));
         // Warm the config cache off-thread so the first scan never blocks.
         scanIo.submit(() -> {
             try {
