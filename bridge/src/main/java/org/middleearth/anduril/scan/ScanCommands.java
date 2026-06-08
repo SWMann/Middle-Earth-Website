@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
@@ -55,23 +57,43 @@ public final class ScanCommands {
         this.ioExecutor = ioExecutor;
     }
 
-    public void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+    /**
+     * Build the {@code /anduril} command tree. Registered at mod-init via
+     * CommandRegistrationCallback — a dedicated server builds its command tree
+     * BEFORE SERVER_STARTING, so registering later misses it. Building needs no
+     * DB; the executes() handlers resolve the live instance (created once the DB
+     * is up, in AndurilServer.onStarting) via {@code provider} at run time.
+     */
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher,
+                                Supplier<ScanCommands> provider) {
         dispatcher.register(literal("anduril")
             .requires(src -> src.hasPermissionLevel(2))
-            .then(literal("pos1").executes(ctx -> setCorner(ctx, 1)))
-            .then(literal("pos2").executes(ctx -> setCorner(ctx, 2)))
-            .then(literal("plot").executes(this::showSelection))
-            .then(literal("clear").executes(this::clearSelection))
+            .then(literal("pos1").executes(ctx -> dispatch(provider, ctx, s -> s.setCorner(ctx, 1))))
+            .then(literal("pos2").executes(ctx -> dispatch(provider, ctx, s -> s.setCorner(ctx, 2))))
+            .then(literal("plot").executes(ctx -> dispatch(provider, ctx, s -> s.showSelection(ctx))))
+            .then(literal("clear").executes(ctx -> dispatch(provider, ctx, s -> s.clearSelection(ctx))))
             .then(literal("scan")
                 .then(argument("districtType", StringArgumentType.word())
-                    .executes(ctx -> doScan(ctx, null, null))
+                    .executes(ctx -> dispatch(provider, ctx, s -> s.doScan(ctx, null, null)))
                     .then(argument("faction", StringArgumentType.word())
-                        .executes(ctx -> doScan(ctx, StringArgumentType.getString(ctx, "faction"), null))
+                        .executes(ctx -> dispatch(provider, ctx, s -> s.doScan(ctx, StringArgumentType.getString(ctx, "faction"), null)))
                         .then(argument("tier", StringArgumentType.word())
-                            .executes(ctx -> doScan(ctx,
+                            .executes(ctx -> dispatch(provider, ctx, s -> s.doScan(ctx,
                                 StringArgumentType.getString(ctx, "faction"),
-                                StringArgumentType.getString(ctx, "tier"))))))));
+                                StringArgumentType.getString(ctx, "tier")))))))));
         Anduril.LOGGER.info("Andúril scan commands registered (/anduril).");
+    }
+
+    /** Resolve the live instance at command-run time; fail gracefully if early. */
+    private static int dispatch(Supplier<ScanCommands> provider,
+                                CommandContext<ServerCommandSource> ctx,
+                                ToIntFunction<ScanCommands> fn) {
+        ScanCommands self = provider.get();
+        if (self == null) {
+            ctx.getSource().sendError(Text.literal("Andúril is still starting — try again in a moment."));
+            return 0;
+        }
+        return fn.applyAsInt(self);
     }
 
     private int setCorner(CommandContext<ServerCommandSource> ctx, int which) {

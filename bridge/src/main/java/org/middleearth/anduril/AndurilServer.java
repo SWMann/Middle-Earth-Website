@@ -36,6 +36,8 @@ public class AndurilServer implements DedicatedServerModInitializer {
     private HttpApi httpApi;
     private ConfigReader configReader;
     private ExecutorService scanIo;
+    /** Resolved lazily by the command handlers; populated in onStarting. */
+    private volatile ScanCommands scanCommands;
 
     @Override
     public void onInitializeServer() {
@@ -44,6 +46,15 @@ public class AndurilServer implements DedicatedServerModInitializer {
         ServerLifecycleEvents.SERVER_STARTING.register(this::onStarting);
         ServerLifecycleEvents.SERVER_STARTED.register(this::onStarted);
         ServerLifecycleEvents.SERVER_STOPPING.register(this::onStopping);
+
+        // The /anduril command tree must be built at mod-init: a dedicated
+        // server constructs its command tree BEFORE SERVER_STARTING fires, so
+        // registering the callback in onStarting misses it entirely. Building
+        // the tree needs no DB; the handlers resolve the live ScanCommands
+        // (created in onStarting) at command-run time.
+        CommandRegistrationCallback.EVENT.register(
+            (dispatcher, registryAccess, environment) ->
+                ScanCommands.register(dispatcher, () -> scanCommands));
     }
 
     private void onStarting(MinecraftServer server) {
@@ -73,10 +84,10 @@ public class AndurilServer implements DedicatedServerModInitializer {
         ScanService scanService = new ScanService();
         PlotScanner plotScanner = new PlotScanner();
         PlotRepository plotRepository = new PlotRepository(database);
-        ScanCommands scanCommands = new ScanCommands(
+        // Publish the live instance for the already-registered command tree.
+        this.scanCommands = new ScanCommands(
             server, configReader, scanService, plotScanner, plotRepository, scanIo);
-        CommandRegistrationCallback.EVENT.register(
-            (dispatcher, registryAccess, environment) -> scanCommands.register(dispatcher));
+        Anduril.LOGGER.info("Andúril scan command handler ready.");
 
         try {
             httpApi = new HttpApi(server, database, configReader, scanService, plotScanner, plotRepository);
@@ -122,6 +133,7 @@ public class AndurilServer implements DedicatedServerModInitializer {
             }
             scanIo = null;
             configReader = null;
+            scanCommands = null;
         }
         if (database != null) {
             database.close();
