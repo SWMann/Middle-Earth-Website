@@ -30,7 +30,13 @@ const DEFAULT_TRANSFORM: PlotTransform = {
   rotationDeg: 0,
 };
 
-export function FloorplanEditor({ catalogue }: { catalogue: FloorplanCatalogue }) {
+export function FloorplanEditor({
+  catalogue,
+  dimensions,
+}: {
+  catalogue: FloorplanCatalogue;
+  dimensions: string[];
+}) {
   const [gridW, setGridW] = useState(32);
   const [gridH, setGridH] = useState(32);
   const cellPx = 18;
@@ -48,6 +54,10 @@ export function FloorplanEditor({ catalogue }: { catalogue: FloorplanCatalogue }
   const [factionId, setFactionId] = useState("");
   const [settlementId, setSettlementId] = useState("");
   const [label, setLabel] = useState("");
+  // Default to the built (non-overworld) world if there is one.
+  const [dimension, setDimension] = useState(
+    () => dimensions.find((d) => d !== "minecraft:overworld") ?? dimensions[0] ?? "minecraft:overworld",
+  );
 
   const [underlay, setUnderlay] = useState<{ src: string; opacity: number } | null>(null);
   const [geo, setGeo] = useState<{ p1: GeoPoint; p2: GeoPoint }>({
@@ -199,6 +209,7 @@ export function FloorplanEditor({ catalogue }: { catalogue: FloorplanCatalogue }
       settlementId: settlementId ? Number(settlementId) : null,
       label,
       source: "floorplanner",
+      dimension,
       minX: p.minX,
       minY: transform.baseY,
       minZ: p.minZ,
@@ -229,6 +240,28 @@ export function FloorplanEditor({ catalogue }: { catalogue: FloorplanCatalogue }
     setBuildings([]);
     setDraftRect(null);
     setSaveResult(null);
+  }
+
+  // Load a top-down terrain render of exactly the area the grid covers, so the
+  // image aligns 1:1 with the cells (rotation 0). The proxy adds the token.
+  function loadTerrain() {
+    setSaveResult(null);
+    if (transform.rotationDeg !== 0) {
+      setSaveResult({ error: "Load terrain supports rotation 0° — set the world position via origin X/Z instead." });
+      return;
+    }
+    const wBlocks = gridW * transform.blocksPerCell;
+    const hBlocks = gridH * transform.blocksPerCell;
+    if (wBlocks * hBlocks > 1_048_576) {
+      setSaveResult({ error: `Grid covers ${wBlocks}×${hBlocks} blocks, over the 1024×1024 render cap — lower grid size or blocks/cell.` });
+      return;
+    }
+    const minX = transform.originBlockX;
+    const minZ = transform.originBlockZ;
+    const maxX = minX + wBlocks - 1;
+    const maxZ = minZ + hBlocks - 1;
+    const src = `/api/admin/terrain?dim=${encodeURIComponent(dimension)}&minX=${minX}&minZ=${minZ}&maxX=${maxX}&maxZ=${maxZ}`;
+    setUnderlay({ src, opacity: underlay?.opacity ?? 0.7 });
   }
 
   const markers = [geo.p1, geo.p2]
@@ -438,7 +471,29 @@ export function FloorplanEditor({ catalogue }: { catalogue: FloorplanCatalogue }
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-xs uppercase tracking-widest opacity-60">Underlay + georeference</h2>
+            <h2 className="text-xs uppercase tracking-widest opacity-60">Terrain underlay</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={lbl}>Dimension</label>
+                <select className={num} value={dimension} onChange={(e) => setDimension(e.target.value)}>
+                  {dimensions.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={loadTerrain}
+                  className="w-full rounded border border-emerald-600 px-3 py-1 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/10"
+                >
+                  Load terrain under grid
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] opacity-60">
+              Renders the real blocks the grid covers (set origin X/Z + blocks/cell first; rotation 0°).
+              Or upload your own underlay image below.
+            </p>
             <input type="file" accept="image/*" className="text-xs"
               onChange={(e) => {
                 const f = e.target.files?.[0];

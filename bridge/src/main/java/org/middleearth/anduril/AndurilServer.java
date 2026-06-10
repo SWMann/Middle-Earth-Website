@@ -2,9 +2,12 @@ package org.middleearth.anduril;
 
 import net.fabricmc.api.DedicatedServerModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 import org.middleearth.anduril.scan.ConfigReader;
+import org.middleearth.anduril.scan.MapTileStore;
 import org.middleearth.anduril.scan.PlotRepository;
 import org.middleearth.anduril.scan.PlotScanner;
 import org.middleearth.anduril.scan.ScanCommands;
@@ -36,6 +39,7 @@ public class AndurilServer implements DedicatedServerModInitializer {
     private HttpApi httpApi;
     private ConfigReader configReader;
     private ExecutorService scanIo;
+    private MapTileStore mapTiles;
     /** Resolved lazily by the command handlers; populated in onStarting. */
     private volatile ScanCommands scanCommands;
 
@@ -89,8 +93,27 @@ public class AndurilServer implements DedicatedServerModInitializer {
             server, configReader, scanService, plotScanner, plotRepository, scanIo);
         Anduril.LOGGER.info("Andúril scan command handler ready.");
 
+        // World-map tile store (the Xaero's-style website map): every chunk
+        // that loads — normal play or the backfill pump — gets its surface
+        // captured into PNG tiles; the tick pump drives backfill + flushes.
+        mapTiles = new MapTileStore(server.getRunDirectory().resolve("anduril-map"));
+        ServerChunkEvents.CHUNK_LOAD.register((world, chunk) -> {
+            MapTileStore store = mapTiles;
+            if (store == null) return;
+            try {
+                store.onChunkLoaded(world, chunk);
+            } catch (Exception e) {
+                // Never let map capture interfere with chunk loading.
+                Anduril.LOGGER.debug("Map capture failed: {}", e.getMessage());
+            }
+        });
+        ServerTickEvents.END_SERVER_TICK.register(s -> {
+            MapTileStore store = mapTiles;
+            if (store != null) store.tick(s);
+        });
+
         try {
-            httpApi = new HttpApi(server, database, configReader, scanService, plotScanner, plotRepository);
+            httpApi = new HttpApi(server, database, configReader, scanService, plotScanner, plotRepository, mapTiles);
             httpApi.start();
         } catch (Exception e) {
             Anduril.LOGGER.error("Failed to start Andúril HTTP API: {}", e.getMessage(), e);
@@ -119,6 +142,12 @@ public class AndurilServer implements DedicatedServerModInitializer {
         if (httpApi != null) {
             httpApi.stop();
             httpApi = null;
+        }
+        // Stop capturing first (events guard on null), then flush tiles.
+        if (mapTiles != null) {
+            MapTileStore store = mapTiles;
+            mapTiles = null;
+            store.shutdown();
         }
         // Drain in-flight scan persists before the DB pool closes under them.
         if (scanIo != null) {

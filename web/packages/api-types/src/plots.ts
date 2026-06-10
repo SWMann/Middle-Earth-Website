@@ -40,6 +40,8 @@ export type SavePlotRequest = {
   settlementId: number | null;
   label: string;
   source: string;
+  /** World dimension id, e.g. 'minecraft:overworld' or 'me:middle_earth'. */
+  dimension: string;
   minX: number;
   minY: number;
   minZ: number;

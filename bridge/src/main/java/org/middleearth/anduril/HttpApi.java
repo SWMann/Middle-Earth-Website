@@ -7,11 +7,17 @@ import io.javalin.http.BadRequestResponse;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import net.minecraft.SharedConstants;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
+import net.minecraft.world.World;
+import net.minecraft.util.WorldSavePath;
 import org.middleearth.anduril.scan.ComponentDetector;
 import org.middleearth.anduril.scan.ConfigReader;
 import org.middleearth.anduril.scan.FootprintValidator;
+import org.middleearth.anduril.scan.MapTileStore;
 import org.middleearth.anduril.scan.PlotGeometry;
 import org.middleearth.anduril.scan.PlotRepository;
 import org.middleearth.anduril.scan.PlotScanner;
@@ -20,7 +26,11 @@ import org.middleearth.anduril.scan.ScanContext;
 import org.middleearth.anduril.scan.ScanObservations;
 import org.middleearth.anduril.scan.ScanResult;
 import org.middleearth.anduril.scan.ScanService;
+import org.middleearth.anduril.scan.TopDownRenderer;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.Connection;
@@ -75,18 +85,21 @@ public class HttpApi {
     private final ScanService scanService;
     private final PlotScanner plotScanner;
     private final PlotRepository plotRepository;
+    private final MapTileStore mapTiles;
     private final byte[] expectedToken; // empty array if not configured
     private final boolean tokenConfigured;
     private Javalin app;
 
     public HttpApi(MinecraftServer server, Database database, ConfigReader configReader,
-                   ScanService scanService, PlotScanner plotScanner, PlotRepository plotRepository) {
+                   ScanService scanService, PlotScanner plotScanner, PlotRepository plotRepository,
+                   MapTileStore mapTiles) {
         this.server = server;
         this.database = database;
         this.configReader = configReader;
         this.scanService = scanService;
         this.plotScanner = plotScanner;
         this.plotRepository = plotRepository;
+        this.mapTiles = mapTiles;
         String fromEnv = System.getenv(TOKEN_ENV);
         if (fromEnv == null || fromEnv.isBlank()) {
             this.expectedToken = new byte[0];
@@ -565,9 +578,9 @@ public class HttpApi {
                     try (PreparedStatement ins = conn.prepareStatement(
                             "INSERT INTO game.plots (" +
                             "settlement_id, district_id, district_type, faction_id, source, label, " +
-                            "min_x, min_y, min_z, max_x, max_y, max_z, " +
+                            "dimension, min_x, min_y, min_z, max_x, max_y, max_z, " +
                             "footprint_cells, transform, layout, review_status, updated_at) " +
-                            "VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
+                            "VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
                             "CAST(? AS jsonb), CAST(? AS jsonb), CAST(? AS jsonb), 'unscanned', NOW()) " +
                             "RETURNING id")) {
                         setNullableLong(ins, 1, req.settlementId());
@@ -575,15 +588,16 @@ public class HttpApi {
                         ins.setString(3, req.factionId());
                         ins.setString(4, req.source() == null || req.source().isBlank() ? "floorplanner" : req.source());
                         ins.setString(5, req.label() == null ? "" : req.label());
-                        ins.setInt(6, req.minX());
-                        ins.setInt(7, req.minY());
-                        ins.setInt(8, req.minZ());
-                        ins.setInt(9, req.maxX());
-                        ins.setInt(10, req.maxY());
-                        ins.setInt(11, req.maxZ());
-                        ins.setString(12, nodeToJson(req.footprintCells()));
-                        ins.setString(13, nodeToJson(req.transform()));
-                        ins.setString(14, nodeToJson(req.layout()));
+                        ins.setString(6, req.dimension() == null || req.dimension().isBlank() ? "minecraft:overworld" : req.dimension());
+                        ins.setInt(7, req.minX());
+                        ins.setInt(8, req.minY());
+                        ins.setInt(9, req.minZ());
+                        ins.setInt(10, req.maxX());
+                        ins.setInt(11, req.maxY());
+                        ins.setInt(12, req.maxZ());
+                        ins.setString(13, nodeToJson(req.footprintCells()));
+                        ins.setString(14, nodeToJson(req.transform()));
+                        ins.setString(15, nodeToJson(req.layout()));
                         try (ResultSet rs = ins.executeQuery()) {
                             rs.next();
                             plotId = rs.getLong(1);
@@ -743,14 +757,14 @@ public class HttpApi {
         app.post("/api/v1/plots/{id}/scan", ctx -> {
             long plotId = parseLongOr400(ctx.pathParam("id"));
 
-            String districtType, factionId, label, tier, transformJson, layoutJson;
+            String districtType, factionId, label, tier, transformJson, layoutJson, dimension;
             Long settlementId, districtId;
             Integer popCap;
             int minX, minY, minZ, maxX, maxY, maxZ;
             try (Connection conn = database.getConnection()) {
                 try (PreparedStatement ps = conn.prepareStatement(
                         "SELECT p.district_type, p.faction_id, p.settlement_id, p.district_id, p.label, " +
-                        "p.min_x, p.min_y, p.min_z, p.max_x, p.max_y, p.max_z, " +
+                        "p.dimension, p.min_x, p.min_y, p.min_z, p.max_x, p.max_y, p.max_z, " +
                         "p.transform::text AS transform, p.layout::text AS layout, " +
                         "s.tier AS tier, s.population_cap AS pop_cap " +
                         "FROM game.plots p LEFT JOIN game.settlements s ON s.id = p.settlement_id " +
@@ -760,6 +774,7 @@ public class HttpApi {
                         if (!rs.next()) throw new NotFoundResponse("Plot not found: " + plotId);
                         districtType = rs.getString("district_type");
                         factionId = rs.getString("faction_id");
+                        dimension = rs.getString("dimension");
                         long sid = rs.getLong("settlement_id");
                         settlementId = rs.wasNull() ? null : sid;
                         long did = rs.getLong("district_id");
@@ -798,10 +813,14 @@ public class HttpApi {
             final int fMinX = minX, fMinY = minY, fMinZ = minZ, fMaxX = maxX, fMaxY = maxY, fMaxZ = maxZ;
             final PlotGeometry.Transform fTransform = transform;
             final List<PlotGeometry.LayoutBuilding> fBuildings = buildings;
+            final String fDimension = dimension;
             CompletableFuture<Observed> future = new CompletableFuture<>();
             server.execute(() -> {
                 try {
-                    ServerWorld world = server.getOverworld();
+                    ServerWorld world = resolveWorld(server, fDimension);
+                    if (world == null) {
+                        throw new IllegalStateException("Dimension not loaded: " + fDimension);
+                    }
                     forceLoadChunks(world, fMinX, fMinZ, fMaxX, fMaxZ);
                     ScanObservations obs = plotScanner.observe(
                         world, fMinX, fMinY, fMinZ, fMaxX, fMaxY, fMaxZ, config, detector, cultureBlocks);
@@ -825,7 +844,7 @@ public class HttpApi {
                 throw new RuntimeException("Scan interrupted", ie);
             } catch (ExecutionException ee) {
                 Throwable cause = ee.getCause();
-                if (cause instanceof IllegalArgumentException) {
+                if (cause instanceof IllegalArgumentException || cause instanceof IllegalStateException) {
                     throw new BadRequestResponse(cause.getMessage());
                 }
                 Anduril.LOGGER.error("World read failed during scan: {}", String.valueOf(cause), cause);
@@ -850,6 +869,147 @@ public class HttpApi {
                 Anduril.LOGGER.error("DB error saving scan: {}", e.getMessage(), e);
                 throw new RuntimeException("Database error", e);
             }
+        });
+
+        // Protected: a top-down, 1-pixel-per-block render of a world region —
+        // the floorplanner's terrain underlay. Same threading contract as the
+        // scan: read the world on the server thread (force-loaded), bounded
+        // future, then PNG-encode off-thread.
+        app.get("/api/v1/render/topdown", ctx -> {
+            String dim = ctx.queryParam("dim");
+            int minX = parseIntParam(ctx, "minX");
+            int minZ = parseIntParam(ctx, "minZ");
+            int maxX = parseIntParam(ctx, "maxX");
+            int maxZ = parseIntParam(ctx, "maxZ");
+            if (minX > maxX || minZ > maxZ) {
+                throw new BadRequestResponse("min coords must be ≤ max coords");
+            }
+            if (resolveWorld(server, dim) == null) {
+                throw new BadRequestResponse("Dimension not loaded: " + dim);
+            }
+
+            final int fMinX = minX, fMinZ = minZ, fMaxX = maxX, fMaxZ = maxZ;
+            CompletableFuture<BufferedImage> future = new CompletableFuture<>();
+            server.execute(() -> {
+                try {
+                    ServerWorld world = resolveWorld(server, dim);
+                    if (world == null) {
+                        throw new IllegalStateException("Dimension not loaded: " + dim);
+                    }
+                    forceLoadChunks(world, fMinX, fMinZ, fMaxX, fMaxZ);
+                    future.complete(new TopDownRenderer().render(world, fMinX, fMinZ, fMaxX, fMaxZ));
+                } catch (Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+
+            BufferedImage img;
+            try {
+                img = future.get(15, TimeUnit.SECONDS);
+            } catch (TimeoutException te) {
+                ctx.status(504).result("Render timed out — server thread busy. Try again.");
+                return;
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Render interrupted", ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof IllegalArgumentException || cause instanceof IllegalStateException) {
+                    throw new BadRequestResponse(cause.getMessage());
+                }
+                Anduril.LOGGER.error("World render failed: {}", String.valueOf(cause), cause);
+                throw new RuntimeException("Render failed during world read", cause);
+            }
+
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(img, "png", baos);
+                ctx.contentType("image/png").header("Cache-Control", "no-store").result(baos.toByteArray());
+            } catch (Exception e) {
+                Anduril.LOGGER.error("PNG encode failed: {}", e.getMessage(), e);
+                throw new RuntimeException("PNG encode failed", e);
+            }
+        });
+
+        // Protected: the loaded world/dimension ids, for the floorplanner's
+        // dimension selector (e.g. 'minecraft:overworld', 'me:middle_earth').
+        app.get("/api/v1/dimensions", ctx -> {
+            java.util.List<String> dims = new java.util.ArrayList<>();
+            for (ServerWorld w : server.getWorlds()) {
+                dims.add(w.getRegistryKey().getValue().toString());
+            }
+            ctx.json(dims);
+        });
+
+        // Protected: one world-map tile (512×512 PNG; scale 0 = 1px/block,
+        // each level up covers 2× the area). Served from the MapTileStore's
+        // disk/memory pyramid — NO world access on this path, so the website
+        // can hammer it without touching the tick. 404 = nothing mapped there.
+        app.get("/api/v1/map/tile", ctx -> {
+            String dim = requireDim(ctx.queryParam("dim"));
+            int scale = parseIntParam(ctx, "scale");
+            int tx = parseIntParam(ctx, "tx");
+            int tz = parseIntParam(ctx, "tz");
+            if (scale < 0 || scale > MapTileStore.MAX_SCALE) {
+                throw new BadRequestResponse("scale must be 0.." + MapTileStore.MAX_SCALE);
+            }
+            if (Math.abs(tx) > 4096 || Math.abs(tz) > 4096) {
+                throw new BadRequestResponse("tile index out of range");
+            }
+            byte[] png;
+            try {
+                png = mapTiles.requestTile(dim, scale, tx, tz).get(10, TimeUnit.SECONDS);
+            } catch (TimeoutException te) {
+                ctx.status(504).result("Tile composition timed out.");
+                return;
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Tile request interrupted", ie);
+            } catch (ExecutionException ee) {
+                Anduril.LOGGER.error("Tile request failed: {}", String.valueOf(ee.getCause()), ee.getCause());
+                throw new RuntimeException("Tile request failed", ee.getCause());
+            }
+            if (png == null) {
+                ctx.status(404).header("Cache-Control", "public, max-age=30").result("");
+                return;
+            }
+            ctx.contentType("image/png").header("Cache-Control", "public, max-age=60").result(png);
+        });
+
+        // Protected: queue a map backfill — every chunk of every EXISTING
+        // region file of the dimension is loaded through the tick pump
+        // (throttled) and captured. Fills the map without waiting for players
+        // to roam. cancel=1 clears the queue.
+        app.post("/api/v1/map/backfill", ctx -> {
+            String dim = requireDim(ctx.queryParam("dim"));
+            if ("1".equals(ctx.queryParam("cancel"))) {
+                mapTiles.cancelBackfill();
+                ctx.json(Map.of("cancelled", true));
+                return;
+            }
+            ServerWorld world = resolveWorld(server, dim);
+            if (world == null) throw new BadRequestResponse("Dimension not loaded: " + dim);
+            java.nio.file.Path regionDir = dimensionDir(server, world).resolve("region");
+
+            // Region listing is plain file IO — do it HERE on the Jetty
+            // worker; only the cheap queue swap crosses to the server thread.
+            // Fire-and-forget: progress is visible via /map/status.
+            List<net.minecraft.util.math.ChunkPos> chunks = MapTileStore.listRegionChunks(regionDir);
+            if (chunks == null) {
+                throw new BadRequestResponse("No region directory at " + regionDir);
+            }
+            final ServerWorld fWorld = world;
+            server.execute(() -> mapTiles.adoptBackfill(fWorld, chunks));
+            Anduril.LOGGER.info("Map backfill requested for {} ({} chunks).", dim, chunks.size());
+            ctx.json(Map.of("dim", dim, "chunksQueued", chunks.size()));
+        });
+
+        // Protected: capture/backfill progress for ops + the website.
+        app.get("/api/v1/map/status", ctx -> {
+            ctx.json(Map.of(
+                "capturedChunks", mapTiles.capturedChunks(),
+                "backfillRemaining", mapTiles.backfillRemaining()
+            ));
         });
 
         // Protected: Postgres connectivity status. Useful for ops to confirm
@@ -952,6 +1112,45 @@ public class HttpApi {
         }
         if (req.minX() > req.maxX() || req.minY() > req.maxY() || req.minZ() > req.maxZ()) {
             throw new BadRequestResponse("min coords must be ≤ max coords on every axis");
+        }
+    }
+
+    /**
+     * Validate a dimension id query param. Strict charset (no dots or
+     * slashes) so the sanitised form can never traverse the tile directory.
+     */
+    private static String requireDim(String dim) {
+        if (dim == null || !dim.matches("[a-z0-9_]+:[a-z0-9_]+")) {
+            throw new BadRequestResponse("dim must be a dimension id like me:middle_earth");
+        }
+        return dim;
+    }
+
+    /** The on-disk save directory of a world (vanilla DIM mapping + datapack dims). */
+    private static java.nio.file.Path dimensionDir(MinecraftServer server, ServerWorld world) {
+        java.nio.file.Path root = server.getSavePath(WorldSavePath.ROOT);
+        Identifier id = world.getRegistryKey().getValue();
+        if (id.equals(Identifier.of("minecraft", "overworld"))) return root;
+        if (id.equals(Identifier.of("minecraft", "the_nether"))) return root.resolve("DIM-1");
+        if (id.equals(Identifier.of("minecraft", "the_end"))) return root.resolve("DIM1");
+        return root.resolve("dimensions").resolve(id.getNamespace()).resolve(id.getPath());
+    }
+
+    /** Resolve a ServerWorld from a dimension id; blank → overworld, bad → null. */
+    private static ServerWorld resolveWorld(MinecraftServer server, String dim) {
+        if (dim == null || dim.isBlank()) return server.getOverworld();
+        Identifier id = Identifier.tryParse(dim);
+        if (id == null) return null;
+        return server.getWorld(RegistryKey.of(RegistryKeys.WORLD, id));
+    }
+
+    private static int parseIntParam(io.javalin.http.Context ctx, String name) {
+        String v = ctx.queryParam(name);
+        if (v == null) throw new BadRequestResponse("Missing query param: " + name);
+        try {
+            return Integer.parseInt(v.trim());
+        } catch (NumberFormatException e) {
+            throw new BadRequestResponse("Invalid integer for " + name + ": " + v);
         }
     }
 
@@ -1058,6 +1257,7 @@ public class HttpApi {
         Long settlementId,
         String label,
         String source,
+        String dimension,
         int minX, int minY, int minZ,
         int maxX, int maxY, int maxZ,
         JsonNode footprintCells,

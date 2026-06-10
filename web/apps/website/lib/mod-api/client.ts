@@ -197,6 +197,36 @@ export async function requestPlotScan(plotId: number): Promise<ScanPlotResponse>
   return await modPost<ScanPlotResponse>(`/plots/${plotId}/scan`, {});
 }
 
+/**
+ * The world dimensions loaded on the server (e.g. 'minecraft:overworld',
+ * 'me:middle_earth') — for the floorplanner's dimension selector. Returns []
+ * when the bridge is mocked/unreachable so callers can fall back to a default.
+ */
+export async function listDimensions(): Promise<string[]> {
+  if (shouldMock()) return [];
+  try {
+    return await modGet<string[]>(`/dimensions`);
+  } catch {
+    return [];
+  }
+}
+
+async function modGet<T>(path: string): Promise<T> {
+  const base = process.env.MOD_API_URL;
+  const token = process.env.MOD_API_TOKEN;
+  if (!base || !token) {
+    throw new Error("MOD_API_URL and MOD_API_TOKEN must be set when not using the mock.");
+  }
+  const res = await fetch(`${base}/api/v1${path}`, {
+    headers: { "X-Mod-Token": token },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new ModApiError(res.status, { title: res.statusText, status: res.status });
+  }
+  return (await res.json()) as T;
+}
+
 async function modPost<T>(path: string, body: unknown): Promise<T> {
   const base = process.env.MOD_API_URL;
   const token = process.env.MOD_API_TOKEN;

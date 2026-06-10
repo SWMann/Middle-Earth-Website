@@ -1,15 +1,24 @@
 import { getMapState } from "@/lib/data/map";
-import { WorldMap } from "@/components/world-map";
+import { TerrainMap } from "@/components/terrain-map";
 
 export const revalidate = 30;
 
 export const metadata = {
   title: "Map — Middle-earth",
-  description: "The world map: region claims and settlements.",
+  description: "The live world map: real terrain, region claims, settlements.",
 };
 
-export default async function MapPage() {
+/** The dimension the campaign world lives in (datapack dimension). */
+const DEFAULT_DIM = "me:middle_earth";
+
+export default async function MapPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ dim?: string }>;
+}) {
   const { regions, settlements } = await getMapState();
+  const { dim } = await searchParams;
+  const safeDim = dim && /^[a-z0-9_]+:[a-z0-9_]+$/.test(dim) ? dim : DEFAULT_DIM;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-12 space-y-6">
@@ -19,12 +28,13 @@ export default async function MapPage() {
         </p>
         <h1 className="text-3xl font-semibold mb-3">Live map</h1>
         <p className="text-sm opacity-70 max-w-2xl">
-          Claims, capitals, holdings. North is up, east is right. Region codes
-          are shown in monospace above each claim.
+          The actual blocks of the world, rendered live from the server —
+          north is up, east is right — with claims and settlements overlaid.
+          Drag to pan, +/− to zoom.
         </p>
       </header>
 
-      <WorldMap regions={regions} settlements={settlements} />
+      <TerrainMap regions={regions} settlements={settlements} dim={safeDim} />
     </div>
   );
 }

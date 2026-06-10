@@ -210,6 +210,12 @@ export const plots = game.table("plots", {
   districtType: text("district_type").notNull(),
   /** Resolves the culture for the theme_adherence criterion (soft FK). */
   factionId: text("faction_id"),
+  /**
+   * The world dimension this plot lives in (e.g. 'minecraft:overworld' or a
+   * datapack dimension like 'me:middle_earth'). The mod reads the correct
+   * world for HTTP scans + terrain renders instead of assuming the overworld.
+   */
+  dimension: text("dimension").notNull().default("minecraft:overworld"),
   source: text("source").notNull().default("command"), // 'command' | 'floorplanner'
   label: text("label").notNull().default(""),
 
