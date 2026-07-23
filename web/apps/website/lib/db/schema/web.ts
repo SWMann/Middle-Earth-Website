@@ -54,6 +54,28 @@ export const mcLinks = web.table("mc_links", {
   unlinkedAt: timestamp("unlinked_at", { withTimezone: true }),
 });
 
+/**
+ * Pending Minecraft-link codes.
+ *
+ * Written and consumed exclusively by the Andúril bridge: the in-game
+ * `/anduril link` command issues a short code here, and the bridge's
+ * `POST /mc-links/redeem` endpoint validates + deletes it. The website
+ * never reads this table — it only ever sees the redemption *result*
+ * (an `mc_links` row it writes itself). It lives in the `web` schema
+ * because it belongs to the identity/linking domain, alongside `mc_links`.
+ *
+ * Codes are single-use and short-lived (15 min); expired rows are cleaned
+ * up opportunistically on redeem. Because it is bridge-private, the mod's
+ * DB role needs INSERT/SELECT/DELETE here (see the bridge deploy runbook).
+ */
+export const mcLinkCodes = web.table("mc_link_codes", {
+  code: text("code").primaryKey(),
+  mcUuid: uuid("mc_uuid").notNull(),
+  mcUsername: text("mc_username").notNull(),
+  issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
 export const sessions = web.table("sessions", {
   sessionId: text("session_id").primaryKey(),
   discordId: text("discord_id")
@@ -92,3 +114,5 @@ export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 export type McLink = typeof mcLinks.$inferSelect;
 export type NewMcLink = typeof mcLinks.$inferInsert;
+export type McLinkCode = typeof mcLinkCodes.$inferSelect;
+export type NewMcLinkCode = typeof mcLinkCodes.$inferInsert;

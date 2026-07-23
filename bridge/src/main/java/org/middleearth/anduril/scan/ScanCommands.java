@@ -66,13 +66,15 @@ public final class ScanCommands {
      */
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher,
                                 Supplier<ScanCommands> provider) {
+        // The op gate lives on each subcommand, not the /anduril root: the root
+        // is shared (LinkCommands merges /anduril link onto it), and link must
+        // stay open to ordinary players. Gating the root would lock them out.
         dispatcher.register(literal("anduril")
-            .requires(src -> src.hasPermissionLevel(2))
-            .then(literal("pos1").executes(ctx -> dispatch(provider, ctx, s -> s.setCorner(ctx, 1))))
-            .then(literal("pos2").executes(ctx -> dispatch(provider, ctx, s -> s.setCorner(ctx, 2))))
-            .then(literal("plot").executes(ctx -> dispatch(provider, ctx, s -> s.showSelection(ctx))))
-            .then(literal("clear").executes(ctx -> dispatch(provider, ctx, s -> s.clearSelection(ctx))))
-            .then(literal("scan")
+            .then(literal("pos1").requires(src -> src.hasPermissionLevel(2)).executes(ctx -> dispatch(provider, ctx, s -> s.setCorner(ctx, 1))))
+            .then(literal("pos2").requires(src -> src.hasPermissionLevel(2)).executes(ctx -> dispatch(provider, ctx, s -> s.setCorner(ctx, 2))))
+            .then(literal("plot").requires(src -> src.hasPermissionLevel(2)).executes(ctx -> dispatch(provider, ctx, s -> s.showSelection(ctx))))
+            .then(literal("clear").requires(src -> src.hasPermissionLevel(2)).executes(ctx -> dispatch(provider, ctx, s -> s.clearSelection(ctx))))
+            .then(literal("scan").requires(src -> src.hasPermissionLevel(2))
                 .then(argument("districtType", StringArgumentType.word())
                     .executes(ctx -> dispatch(provider, ctx, s -> s.doScan(ctx, null, null)))
                     .then(argument("faction", StringArgumentType.word())

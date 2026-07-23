@@ -1,9 +1,11 @@
 package org.middleearth.anduril;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.javalin.http.BadRequestResponse;
+import io.javalin.http.GoneResponse;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import net.minecraft.SharedConstants;
@@ -14,6 +16,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 import net.minecraft.util.WorldSavePath;
+import org.middleearth.anduril.link.LinkCodeRepository;
 import org.middleearth.anduril.scan.ComponentDetector;
 import org.middleearth.anduril.scan.ConfigReader;
 import org.middleearth.anduril.scan.FootprintValidator;
@@ -33,6 +36,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -85,6 +89,7 @@ public class HttpApi {
     private final ScanService scanService;
     private final PlotScanner plotScanner;
     private final PlotRepository plotRepository;
+    private final LinkCodeRepository linkCodes;
     private final MapTileStore mapTiles;
     private final byte[] expectedToken; // empty array if not configured
     private final boolean tokenConfigured;
@@ -92,13 +97,14 @@ public class HttpApi {
 
     public HttpApi(MinecraftServer server, Database database, ConfigReader configReader,
                    ScanService scanService, PlotScanner plotScanner, PlotRepository plotRepository,
-                   MapTileStore mapTiles) {
+                   LinkCodeRepository linkCodes, MapTileStore mapTiles) {
         this.server = server;
         this.database = database;
         this.configReader = configReader;
         this.scanService = scanService;
         this.plotScanner = plotScanner;
         this.plotRepository = plotRepository;
+        this.linkCodes = linkCodes;
         this.mapTiles = mapTiles;
         String fromEnv = System.getenv(TOKEN_ENV);
         if (fromEnv == null || fromEnv.isBlank()) {
@@ -180,6 +186,42 @@ public class HttpApi {
                 escape(SharedConstants.getGameVersion().getName())
             );
             ctx.contentType("application/json").result(body);
+        });
+
+        // Protected: redeem a Minecraft-link code. The in-game `/anduril link`
+        // command wrote the code into web.mc_link_codes; here we consume it and
+        // return the identity the website needs to write its own web.mc_links
+        // row. This closes the account-linking loop that the Phase 1 mock stood
+        // in for. Snake_case wire shape (code/discord_id → mc_uuid/mc_username/
+        // linked_at) predates the camelCase DTO convention and is kept verbatim
+        // so the existing website link flow and its mock stay untouched.
+        app.post("/api/v1/mc-links/redeem", ctx -> {
+            LinkRedeemRequest req = ctx.bodyAsClass(LinkRedeemRequest.class);
+            if (req == null || req.code() == null || req.code().isBlank()) {
+                throw new BadRequestResponse("Missing link code.");
+            }
+            // Codes are stored uppercase; normalise so lower/mixed-case input
+            // (or a copy-paste with stray spaces) still matches.
+            String code = req.code().trim().toUpperCase();
+            try {
+                LinkCodeRepository.RedeemResult result = linkCodes.redeem(code);
+                switch (result.status()) {
+                    case NOT_FOUND -> throw new NotFoundResponse("Unknown or expired link code.");
+                    case EXPIRED -> throw new GoneResponse("Link code has expired.");
+                    case OK -> {
+                        Anduril.LOGGER.info(
+                            "MC_LINK_REDEEMED: {} ({}) → discord {}",
+                            result.mcUsername(), result.mcUuid(), req.discordId());
+                        ctx.json(new LinkRedeemResponse(
+                            result.mcUuid().toString(),
+                            result.mcUsername(),
+                            Instant.now().toString()));
+                    }
+                }
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("DB error during mc-link redeem: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
         });
 
         // Protected: admin grant of coin or DP to a faction. The first
@@ -1223,6 +1265,23 @@ public class HttpApi {
     }
 
     /** Request body for POST /api/v1/admin/factions/{id}/grant. */
+    /**
+     * Request body for POST /api/v1/mc-links/redeem. Snake_case on the wire to
+     * match the website's Phase 1 contract (@modspec/api-types mc-links.ts);
+     * @JsonProperty maps it onto camelCase record components.
+     */
+    public record LinkRedeemRequest(
+        String code,
+        @JsonProperty("discord_id") String discordId
+    ) {}
+
+    /** Response body — the identity the website binds to the Discord account. */
+    public record LinkRedeemResponse(
+        @JsonProperty("mc_uuid") String mcUuid,
+        @JsonProperty("mc_username") String mcUsername,
+        @JsonProperty("linked_at") String linkedAt
+    ) {}
+
     public record GrantRequest(String currency, Long amount, String reason) {}
 
     /** Response body — the updated faction state plus the audit row id. */
