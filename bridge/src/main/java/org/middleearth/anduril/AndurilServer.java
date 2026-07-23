@@ -6,6 +6,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
+import org.middleearth.anduril.link.LinkCodeRepository;
+import org.middleearth.anduril.link.LinkCommands;
 import org.middleearth.anduril.scan.ConfigReader;
 import org.middleearth.anduril.scan.MapTileStore;
 import org.middleearth.anduril.scan.PlotRepository;
@@ -42,6 +44,8 @@ public class AndurilServer implements DedicatedServerModInitializer {
     private MapTileStore mapTiles;
     /** Resolved lazily by the command handlers; populated in onStarting. */
     private volatile ScanCommands scanCommands;
+    /** Resolved lazily by the /anduril link handler; populated in onStarting. */
+    private volatile LinkCommands linkCommands;
 
     @Override
     public void onInitializeServer() {
@@ -57,8 +61,11 @@ public class AndurilServer implements DedicatedServerModInitializer {
         // the tree needs no DB; the handlers resolve the live ScanCommands
         // (created in onStarting) at command-run time.
         CommandRegistrationCallback.EVENT.register(
-            (dispatcher, registryAccess, environment) ->
-                ScanCommands.register(dispatcher, () -> scanCommands));
+            (dispatcher, registryAccess, environment) -> {
+                ScanCommands.register(dispatcher, () -> scanCommands);
+                // Merges /anduril link onto the same root ScanCommands builds.
+                LinkCommands.register(dispatcher, () -> linkCommands);
+            });
     }
 
     private void onStarting(MinecraftServer server) {
@@ -93,6 +100,12 @@ public class AndurilServer implements DedicatedServerModInitializer {
             server, configReader, scanService, plotScanner, plotRepository, scanIo);
         Anduril.LOGGER.info("Andúril scan command handler ready.");
 
+        // Account-linking: the /anduril link command mints codes; the HTTP
+        // /mc-links/redeem endpoint consumes them. Both go through one repo.
+        LinkCodeRepository linkCodes = new LinkCodeRepository(database);
+        this.linkCommands = new LinkCommands(server, linkCodes, scanIo);
+        Anduril.LOGGER.info("Andúril link command handler ready.");
+
         // World-map tile store (the Xaero's-style website map): every chunk
         // that loads — normal play or the backfill pump — gets its surface
         // captured into PNG tiles; the tick pump drives backfill + flushes.
@@ -113,7 +126,7 @@ public class AndurilServer implements DedicatedServerModInitializer {
         });
 
         try {
-            httpApi = new HttpApi(server, database, configReader, scanService, plotScanner, plotRepository, mapTiles);
+            httpApi = new HttpApi(server, database, configReader, scanService, plotScanner, plotRepository, linkCodes, mapTiles);
             httpApi.start();
         } catch (Exception e) {
             Anduril.LOGGER.error("Failed to start Andúril HTTP API: {}", e.getMessage(), e);
