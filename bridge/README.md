@@ -52,11 +52,17 @@ cd bridge
 
 This subproject has its own gradle wrapper — independent build from
 the upstream mod at the repo root. Both projects pin the same Fabric
-Loom + Minecraft 1.21.1 versions so jars are compatible.
+Loom + Minecraft 1.21.8 versions so jars are compatible.
 
 To run alongside the upstream Middle-earth mod, drop both built JARs
 into the server's `mods/` folder. They coexist as separate mod IDs
-(`me` and `anduril`).
+(`middle-earth` and `anduril`).
+
+Since 1.0.0-1.21.8-beta the upstream project is a three-module
+monorepo (`sevenstars-api`, `middle-earth`, `of-beasts-and-wild-things`)
+under the `net.sevenstars` group, and its mod ID moved from `me` to
+`middle-earth`. It registers registry aliases for the old `me:` ids, so
+existing block/item references still resolve.
 
 ## Mod ID / packaging
 

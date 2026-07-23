@@ -199,7 +199,7 @@ export async function requestPlotScan(plotId: number): Promise<ScanPlotResponse>
 
 /**
  * The world dimensions loaded on the server (e.g. 'minecraft:overworld',
- * 'me:middle_earth') — for the floorplanner's dimension selector. Returns []
+ * 'middle-earth:middle_earth') — for the floorplanner's dimension selector. Returns []
  * when the bridge is mocked/unreachable so callers can fall back to a default.
  */
 export async function listDimensions(): Promise<string[]> {

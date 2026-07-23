@@ -116,7 +116,7 @@ public final class MapTileStore {
         if (world.getRegistryKey().getValue().toString().equals(backfillDim)
                 && inFlight.remove(cp.toLong()) != null) {
             world.getChunkManager().removeTicket(
-                net.minecraft.server.world.ChunkTicketType.FORCED, cp, 0, cp);
+                net.minecraft.server.world.ChunkTicketType.FORCED, cp, 0);
         }
     }
 
@@ -237,7 +237,7 @@ public final class MapTileStore {
             if (waited > INFLIGHT_TIMEOUT_TICKS) {
                 ChunkPos cp = new ChunkPos(e.getKey());
                 world.getChunkManager().removeTicket(
-                    net.minecraft.server.world.ChunkTicketType.FORCED, cp, 0, cp);
+                    net.minecraft.server.world.ChunkTicketType.FORCED, cp, 0);
                 it.remove();
             }
         }
@@ -246,7 +246,7 @@ public final class MapTileStore {
         for (int i = 0; i < TICKETS_PER_TICK && inFlight.size() < MAX_INFLIGHT && !backfillQueue.isEmpty(); i++) {
             ChunkPos cp = backfillQueue.poll();
             backfillRemaining.decrementAndGet();
-            world.getChunkManager().addTicket(net.minecraft.server.world.ChunkTicketType.FORCED, cp, 0, cp);
+            world.getChunkManager().addTicket(net.minecraft.server.world.ChunkTicketType.FORCED, cp, 0);
             inFlight.put(cp.toLong(), 0);
         }
 

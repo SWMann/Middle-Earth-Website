@@ -212,7 +212,7 @@ export const plots = game.table("plots", {
   factionId: text("faction_id"),
   /**
    * The world dimension this plot lives in (e.g. 'minecraft:overworld' or a
-   * datapack dimension like 'me:middle_earth'). The mod reads the correct
+   * datapack dimension like 'middle-earth:middle_earth'). The mod reads the correct
    * world for HTTP scans + terrain renders instead of assuming the overworld.
    */
   dimension: text("dimension").notNull().default("minecraft:overworld"),

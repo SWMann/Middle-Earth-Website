@@ -168,7 +168,7 @@ public class HttpApi {
     private void registerRoutes(Javalin app) {
         // Open: liveness / readiness check.
         app.get("/api/v1/health", ctx -> {
-            String mcVersion = SharedConstants.getGameVersion().getName();
+            String mcVersion = SharedConstants.getGameVersion().name();
             int playerCount = server.getCurrentPlayerCount();
             int maxPlayers = server.getMaxPlayerCount();
             String body = String.format(
@@ -183,7 +183,7 @@ public class HttpApi {
             String body = String.format(
                 "{\"mod\":\"anduril\",\"version\":\"%s\",\"mc_version\":\"%s\",\"auth\":\"ok\"}",
                 escape(Anduril.MOD_VERSION),
-                escape(SharedConstants.getGameVersion().getName())
+                escape(SharedConstants.getGameVersion().name())
             );
             ctx.contentType("application/json").result(body);
         });
@@ -974,7 +974,7 @@ public class HttpApi {
         });
 
         // Protected: the loaded world/dimension ids, for the floorplanner's
-        // dimension selector (e.g. 'minecraft:overworld', 'me:middle_earth').
+        // dimension selector (e.g. 'minecraft:overworld', 'middle-earth:middle_earth').
         app.get("/api/v1/dimensions", ctx -> {
             java.util.List<String> dims = new java.util.ArrayList<>();
             for (ServerWorld w : server.getWorlds()) {
@@ -1163,7 +1163,7 @@ public class HttpApi {
      */
     private static String requireDim(String dim) {
         if (dim == null || !dim.matches("[a-z0-9_]+:[a-z0-9_]+")) {
-            throw new BadRequestResponse("dim must be a dimension id like me:middle_earth");
+            throw new BadRequestResponse("dim must be a dimension id like middle-earth:middle_earth");
         }
         return dim;
     }

@@ -8,8 +8,15 @@ export const metadata = {
   description: "The live world map: real terrain, region claims, settlements.",
 };
 
-/** The dimension the campaign world lives in (datapack dimension). */
-const DEFAULT_DIM = "me:middle_earth";
+/**
+ * The dimension the campaign world lives in (datapack dimension).
+ *
+ * Renamed from 'me:middle_earth' when the upstream mod moved to the
+ * SevenStars layout in 1.0.0-1.21.8-beta (MOD_ID 'me' -> 'middle-earth').
+ * The mod registers registry aliases for the old ids, but the dimension
+ * key we query by is the new one.
+ */
+const DEFAULT_DIM = "middle-earth:middle_earth";
 
 export default async function MapPage({
   searchParams,
