@@ -1162,7 +1162,12 @@ public class HttpApi {
      * slashes) so the sanitised form can never traverse the tile directory.
      */
     private static String requireDim(String dim) {
-        if (dim == null || !dim.matches("[a-z0-9_]+:[a-z0-9_]+")) {
+        // Minecraft identifiers allow [a-z0-9_.-] in the namespace and
+        // [a-z0-9_.-/] in the path. The namespace hyphen matters here: the
+        // upstream mod's dimension is 'middle-earth:middle_earth' (renamed
+        // from 'me:middle_earth' in 1.0.0-1.21.8), and the old [a-z0-9_]
+        // pattern rejected it — silently breaking every map tile request.
+        if (dim == null || !dim.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")) {
             throw new BadRequestResponse("dim must be a dimension id like middle-earth:middle_earth");
         }
         return dim;

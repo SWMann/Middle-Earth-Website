@@ -25,7 +25,7 @@ export default async function MapPage({
 }) {
   const { regions, settlements } = await getMapState();
   const { dim } = await searchParams;
-  const safeDim = dim && /^[a-z0-9_]+:[a-z0-9_]+$/.test(dim) ? dim : DEFAULT_DIM;
+  const safeDim = dim && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(dim) ? dim : DEFAULT_DIM;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-12 space-y-6">

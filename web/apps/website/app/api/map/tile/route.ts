@@ -9,7 +9,10 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export const dynamic = "force-dynamic";
 
-const DIM_RE = /^[a-z0-9_]+:[a-z0-9_]+$/;
+// Minecraft identifier charset — the namespace hyphen matters: the dimension
+// is 'middle-earth:middle_earth' (renamed from 'me:' in 1.0.0-1.21.8). The old
+// [a-z0-9_] pattern rejected the hyphen and 400'd every tile request.
+const DIM_RE = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/;
 const INT_RE = /^-?\d{1,5}$/;
 
 export async function GET(req: NextRequest) {
