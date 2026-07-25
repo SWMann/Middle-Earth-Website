@@ -21,12 +21,22 @@ type Props = {
   regions: MapRegion[];
   settlements: MapSettlement[];
   dim: string;
+  /**
+   * Override the opening view. Used while only part of the world is surveyed
+   * to real coordinates + pregenerated: fitting all markers (initialView)
+   * would frame the fictional placeholder coords over blank, un-tiled terrain,
+   * so we open on the one area that actually has tiles instead. Drop this once
+   * every settlement has real coordinates and initialView's fit-all is right.
+   */
+  initialCenter?: { x: number; z: number };
 };
 
-export function TerrainMap({ regions, settlements, dim }: Props) {
+export function TerrainMap({ regions, settlements, dim, initialCenter }: Props) {
   const initial = useMemo(() => initialView(regions, settlements), [regions, settlements]);
-  const [scale, setScale] = useState(initial.scale);
-  const [center, setCenter] = useState<{ x: number; z: number }>(initial.center);
+  // A close-in default scale (≈3.6k blocks across a 900px map) when we're
+  // opening on a specific surveyed location rather than fitting everything.
+  const [scale, setScale] = useState(initialCenter ? 2 : initial.scale);
+  const [center, setCenter] = useState<{ x: number; z: number }>(initialCenter ?? initial.center);
   const [size, setSize] = useState({ w: 960, h: 600 });
   const [focus, setFocus] = useState<Focus | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);

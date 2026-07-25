@@ -27,6 +27,15 @@ export default async function MapPage({
   const { dim } = await searchParams;
   const safeDim = dim && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(dim) ? dim : DEFAULT_DIM;
 
+  // Only Minas Tirith is surveyed to real coordinates and pregenerated so far,
+  // so open the map there rather than fitting all markers (most of which still
+  // sit at fictional placeholder coords over un-tiled terrain). Remove this
+  // once every settlement has real coordinates.
+  const focus = settlements.find((s) => s.name === "Minas Tirith");
+  const initialCenter = focus
+    ? { x: focus.centreX, z: focus.centreZ }
+    : undefined;
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-12 space-y-6">
       <header>
@@ -41,7 +50,12 @@ export default async function MapPage({
         </p>
       </header>
 
-      <TerrainMap regions={regions} settlements={settlements} dim={safeDim} />
+      <TerrainMap
+        regions={regions}
+        settlements={settlements}
+        dim={safeDim}
+        initialCenter={initialCenter}
+      />
     </div>
   );
 }
