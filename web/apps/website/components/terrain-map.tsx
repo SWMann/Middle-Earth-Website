@@ -194,10 +194,40 @@ export function TerrainMap({ regions, settlements, dim, initialCenter, baseLayer
           {/* Claims + settlements overlay (same projection) */}
           <svg className="absolute inset-0 h-full w-full pointer-events-none">
             {regions.map((r) => {
+              const colour = r.claim?.bannerHex ?? "#9ca3af";
+              // Authored polygon boundary takes precedence over the circle.
+              if (r.boundary && r.boundary.length >= 3) {
+                const pts = r.boundary.map(([x, z]) => toScreen(x, z));
+                const points = pts.map(([px, py]) => `${px},${py}`).join(" ");
+                const [lx, ly] = toScreen(r.centreX, r.centreZ);
+                return (
+                  <g key={r.id}>
+                    <polygon
+                      points={points}
+                      fill={colour}
+                      fillOpacity={0.18}
+                      stroke={colour}
+                      strokeOpacity={0.85}
+                      strokeWidth={1.5}
+                      strokeLinejoin="round"
+                      className="pointer-events-auto cursor-pointer"
+                      onClick={() => setFocus({ kind: "region", id: r.id })}
+                    />
+                    <text
+                      x={lx}
+                      y={ly}
+                      textAnchor="middle"
+                      className="fill-stone-200 font-mono"
+                      style={{ fontSize: 10, paintOrder: "stroke", stroke: "#000", strokeWidth: 2 }}
+                    >
+                      {r.id}
+                    </text>
+                  </g>
+                );
+              }
               const [sx, sy] = toScreen(r.centreX, r.centreZ);
               const radius = (r.radiusBlocks * 0.45) / bpp;
               if (radius < 3) return null;
-              const colour = r.claim?.bannerHex ?? "#9ca3af";
               return (
                 <g key={r.id}>
                   <circle

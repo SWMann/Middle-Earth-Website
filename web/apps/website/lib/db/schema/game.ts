@@ -88,6 +88,13 @@ export const regions = game.table("regions", {
   centreX: integer("centre_x").notNull(),
   centreZ: integer("centre_z").notNull(),
   radiusBlocks: integer("radius_blocks").notNull().default(1000),
+  /**
+   * Optional polygon boundary as an ordered ring of [x, z] world coordinates
+   * (no repeated closing vertex — the ring closes implicitly). When present the
+   * map draws this instead of the centre+radius circle; when null it falls back
+   * to the circle. Authored via the admin region editor; written by the bridge.
+   */
+  boundary: jsonb("boundary").$type<[number, number][] | null>(),
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
 });
 

@@ -10,6 +10,8 @@ export type MapRegion = {
   centreX: number;
   centreZ: number;
   radiusBlocks: number;
+  /** Ordered ring of [x, z] world coords, or null to fall back to the circle. */
+  boundary: [number, number][] | null;
   claim: { factionId: string; displayName: string; bannerHex: string | null } | null;
 };
 
@@ -41,6 +43,7 @@ export const getMapState = cache(async () => {
       centreX: schema.regions.centreX,
       centreZ: schema.regions.centreZ,
       radiusBlocks: schema.regions.radiusBlocks,
+      boundary: schema.regions.boundary,
       claimFactionId: schema.regionClaims.factionId,
       claimFactionName: schema.factions.displayName,
       claimFactionColour: schema.factions.bannerHex,
@@ -79,6 +82,7 @@ export const getMapState = cache(async () => {
     centreX: r.centreX,
     centreZ: r.centreZ,
     radiusBlocks: r.radiusBlocks,
+    boundary: r.boundary,
     claim: r.claimFactionId
       ? {
           factionId: r.claimFactionId,
