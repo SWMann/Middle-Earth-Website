@@ -178,6 +178,10 @@ export function TerrainMap({ regions, settlements, dim, initialCenter, baseLayer
                 top: t.top,
                 width: t.w,
                 height: t.h,
+                // Tiles can be wider than the map container (the world-gen
+                // pyramid's tiles are 3000px); opt out of the framework's
+                // `img { max-width: 100% }` so they aren't squished.
+                maxWidth: "none",
                 imageRendering: t.pixelated ? "pixelated" : "auto",
               }}
               onError={(e) => {

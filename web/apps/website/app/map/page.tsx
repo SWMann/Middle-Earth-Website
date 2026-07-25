@@ -44,9 +44,9 @@ export default async function MapPage({
         </p>
         <h1 className="text-3xl font-semibold mb-3">Live map</h1>
         <p className="text-sm opacity-70 max-w-2xl">
-          The actual blocks of the world, rendered live from the server —
-          north is up, east is right — with claims and settlements overlaid.
-          Drag to pan, +/− to zoom.
+          The canonical map of Middle-earth, as the mod generates it — north
+          is up, east is right — with region claims and settlements overlaid by
+          world coordinate. Drag to pan, +/− to zoom.
         </p>
       </header>
 
