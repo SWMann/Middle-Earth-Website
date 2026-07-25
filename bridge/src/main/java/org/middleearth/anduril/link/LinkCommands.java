@@ -5,6 +5,8 @@ import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import org.middleearth.anduril.Anduril;
@@ -96,9 +98,18 @@ public final class LinkCommands {
             try {
                 repository.issue(mcUuid, mcUsername, code, now, expiresAt);
                 server.execute(() -> {
+                    // The code itself is click-to-copy: clicking it in chat
+                    // copies the raw code to the clipboard (Minecraft's
+                    // ClickEvent.CopyToClipboard), so the player can paste it
+                    // straight into the website instead of retyping it.
                     player.sendMessage(Text.literal("Your link code: ")
                         .formatted(Formatting.GRAY)
-                        .append(Text.literal(code).formatted(Formatting.GOLD, Formatting.BOLD)));
+                        .append(Text.literal(code)
+                            .formatted(Formatting.GOLD, Formatting.BOLD)
+                            .styled(s -> s
+                                .withClickEvent(new ClickEvent.CopyToClipboard(code))
+                                .withHoverEvent(new HoverEvent.ShowText(
+                                    Text.literal("Click to copy this code"))))));
                     player.sendMessage(Text.literal(
                         "Enter it on the website's Link page while signed in with Discord. "
                         + "It expires in " + CODE_TTL.toMinutes() + " minutes and can be used once.")
