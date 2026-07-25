@@ -55,6 +55,7 @@ export default async function MapPage({
         settlements={settlements}
         dim={safeDim}
         initialCenter={initialCenter}
+        baseLayer="worldgen"
       />
     </div>
   );

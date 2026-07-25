@@ -21,6 +21,7 @@ import org.middleearth.anduril.scan.ComponentDetector;
 import org.middleearth.anduril.scan.ConfigReader;
 import org.middleearth.anduril.scan.FootprintValidator;
 import org.middleearth.anduril.scan.MapTileStore;
+import org.middleearth.anduril.scan.WorldMapStore;
 import org.middleearth.anduril.scan.PlotGeometry;
 import org.middleearth.anduril.scan.PlotRepository;
 import org.middleearth.anduril.scan.PlotScanner;
@@ -91,13 +92,14 @@ public class HttpApi {
     private final PlotRepository plotRepository;
     private final LinkCodeRepository linkCodes;
     private final MapTileStore mapTiles;
+    private final WorldMapStore worldMap;
     private final byte[] expectedToken; // empty array if not configured
     private final boolean tokenConfigured;
     private Javalin app;
 
     public HttpApi(MinecraftServer server, Database database, ConfigReader configReader,
                    ScanService scanService, PlotScanner plotScanner, PlotRepository plotRepository,
-                   LinkCodeRepository linkCodes, MapTileStore mapTiles) {
+                   LinkCodeRepository linkCodes, MapTileStore mapTiles, WorldMapStore worldMap) {
         this.server = server;
         this.database = database;
         this.configReader = configReader;
@@ -106,6 +108,7 @@ public class HttpApi {
         this.plotRepository = plotRepository;
         this.linkCodes = linkCodes;
         this.mapTiles = mapTiles;
+        this.worldMap = worldMap;
         String fromEnv = System.getenv(TOKEN_ENV);
         if (fromEnv == null || fromEnv.isBlank()) {
             this.expectedToken = new byte[0];
@@ -1017,6 +1020,45 @@ public class HttpApi {
             }
             ctx.contentType("image/png").header("Cache-Control", "public, max-age=60").result(png);
         });
+
+        // Protected: one tile of the mod's canonical world-gen map (the biome
+        // or height pyramid the mod generates terrain from). Covers ALL of
+        // Middle-earth, not just visited chunks. Served straight off the
+        // extracted on-disk cache — no world access. layer=biomes|heights,
+        // level 0..MAX_LEVEL, grid 2^level per axis. See WorldMapStore.
+        app.get("/api/v1/worldmap/tile", ctx -> {
+            String layer = ctx.queryParam("layer");
+            if (!"biomes".equals(layer) && !"heights".equals(layer)) {
+                throw new BadRequestResponse("layer must be biomes or heights");
+            }
+            int level = parseIntParam(ctx, "level");
+            int col = parseIntParam(ctx, "col");
+            int row = parseIntParam(ctx, "row");
+            byte[] png;
+            try {
+                png = worldMap.tile(layer, level, col, row);
+            } catch (java.io.IOException e) {
+                Anduril.LOGGER.error("World-gen tile read failed: {}", e.getMessage(), e);
+                throw new RuntimeException("World-gen tile read failed", e);
+            }
+            if (png == null) {
+                ctx.status(404).header("Cache-Control", "public, max-age=60").result("");
+                return;
+            }
+            // Canonical map is static; cache hard.
+            ctx.contentType("image/png").header("Cache-Control", "public, max-age=86400").result(png);
+        });
+
+        // Protected: world-gen map metadata — the image↔world transform the
+        // web client needs to project markers/polygons onto the map.
+        app.get("/api/v1/worldmap/meta", ctx -> ctx.json(Map.of(
+            "ready", worldMap.isReady(),
+            "tilePx", WorldMapStore.TILE_PX,
+            "maxLevel", WorldMapStore.MAX_LEVEL,
+            "blocksPerPixelFinest", WorldMapStore.BLOCKS_PER_PX_FINEST,
+            "worldSize", WorldMapStore.WORLD_SIZE,
+            "layers", List.of("biomes", "heights")
+        )));
 
         // Protected: queue a map backfill — every chunk of every EXISTING
         // region file of the dimension is loaded through the tick pump

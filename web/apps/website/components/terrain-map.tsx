@@ -17,10 +17,25 @@ import type { MapRegion, MapSettlement } from "@/lib/data/map";
 const TILE = 512;
 const MAX_SCALE = 6;
 
+// World-gen (canonical mod map) pyramid — the biome images the mod itself
+// generates terrain from. 3000px tiles, levels 0..3, the full world is 96000
+// blocks square, so blocks/px at level L = 32/2^L (see the bridge's
+// WorldMapStore). At level L the grid is 2^L × 2^L tiles.
+const WG_TILE_PX = 3000;
+const WG_WORLD_SIZE = 96000;
+const WG_MAX_LEVEL = 3;
+
 type Props = {
   regions: MapRegion[];
   settlements: MapSettlement[];
   dim: string;
+  /**
+   * Which base imagery to draw under the claims/settlement overlay:
+   * "terrain" (default) = live Xaero-style blocks the Andúril mod renders from
+   * the world, per dimension; "worldgen" = the mod's canonical biome map, which
+   * covers ALL of Middle-earth regardless of what's been generated in-game.
+   */
+  baseLayer?: "terrain" | "worldgen";
   /**
    * Override the opening view. Used while only part of the world is surveyed
    * to real coordinates + pregenerated: fitting all markers (initialView)
@@ -31,7 +46,7 @@ type Props = {
   initialCenter?: { x: number; z: number };
 };
 
-export function TerrainMap({ regions, settlements, dim, initialCenter }: Props) {
+export function TerrainMap({ regions, settlements, dim, initialCenter, baseLayer = "terrain" }: Props) {
   const initial = useMemo(() => initialView(regions, settlements), [regions, settlements]);
   // A close-in default scale (≈3.6k blocks across a 900px map) when we're
   // opening on a specific surveyed location rather than fitting everything.
@@ -60,15 +75,65 @@ export function TerrainMap({ regions, settlements, dim, initialCenter }: Props) 
     (z - center.z) / bpp + size.h / 2,
   ];
 
-  // Visible tile range: tile (tx,tz) spans [tx·512·bpp, (tx+1)·512·bpp) blocks.
-  const tileSpan = TILE * bpp;
-  const tx0 = Math.floor((center.x - (size.w / 2) * bpp) / tileSpan);
-  const tx1 = Math.floor((center.x + (size.w / 2) * bpp) / tileSpan);
-  const tz0 = Math.floor((center.z - (size.h / 2) * bpp) / tileSpan);
-  const tz1 = Math.floor((center.z + (size.h / 2) * bpp) / tileSpan);
-  const tiles: { tx: number; tz: number }[] = [];
-  for (let tz = tz0; tz <= tz1; tz++) {
-    for (let tx = tx0; tx <= tx1; tx++) tiles.push({ tx, tz });
+  // Base-map tiles as positioned <img> descriptors, unified across layers so
+  // the projection/overlay/pan-zoom below stay identical for both.
+  type BaseTile = {
+    key: string;
+    src: string;
+    left: number;
+    top: number;
+    w: number;
+    h: number;
+    pixelated: boolean;
+  };
+  const baseTiles: BaseTile[] = [];
+  if (baseLayer === "worldgen") {
+    // Pick the pyramid level whose native resolution (32/2^L blocks/px) best
+    // matches the current zoom, so tiles aren't needlessly blurry or heavy.
+    // scale 2 → level 3 (finest), scale ≥5 → level 0 (whole map).
+    const level = Math.max(0, Math.min(WG_MAX_LEVEL, 5 - scale));
+    const perAxis = 1 << level;
+    const tileBlocks = WG_WORLD_SIZE / perAxis; // world blocks one tile spans
+    const c0 = Math.max(0, Math.floor((center.x - (size.w / 2) * bpp) / tileBlocks));
+    const c1 = Math.min(perAxis - 1, Math.floor((center.x + (size.w / 2) * bpp) / tileBlocks));
+    const r0 = Math.max(0, Math.floor((center.z - (size.h / 2) * bpp) / tileBlocks));
+    const r1 = Math.min(perAxis - 1, Math.floor((center.z + (size.h / 2) * bpp) / tileBlocks));
+    const px = tileBlocks / bpp; // on-screen size of one 3000px tile
+    for (let row = r0; row <= r1; row++) {
+      for (let col = c0; col <= c1; col++) {
+        const [sx, sy] = toScreen(col * tileBlocks, row * tileBlocks);
+        baseTiles.push({
+          key: `wg/${level}/${col}/${row}`,
+          src: `/api/worldmap/tile?layer=biomes&level=${level}&col=${col}&row=${row}`,
+          left: sx,
+          top: sy,
+          w: px,
+          h: px,
+          pixelated: false,
+        });
+      }
+    }
+  } else {
+    // Live terrain: 512px tile (tx,tz) spans [tx·512·bpp, (tx+1)·512·bpp) blocks.
+    const tileSpan = TILE * bpp;
+    const tx0 = Math.floor((center.x - (size.w / 2) * bpp) / tileSpan);
+    const tx1 = Math.floor((center.x + (size.w / 2) * bpp) / tileSpan);
+    const tz0 = Math.floor((center.z - (size.h / 2) * bpp) / tileSpan);
+    const tz1 = Math.floor((center.z + (size.h / 2) * bpp) / tileSpan);
+    for (let tz = tz0; tz <= tz1; tz++) {
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const [sx, sy] = toScreen(tx * tileSpan, tz * tileSpan);
+        baseTiles.push({
+          key: `t/${scale}/${tx}/${tz}`,
+          src: `/api/map/tile?dim=${encodeURIComponent(dim)}&scale=${scale}&tx=${tx}&tz=${tz}`,
+          left: sx,
+          top: sy,
+          w: TILE,
+          h: TILE,
+          pixelated: scale <= 1,
+        });
+      }
+    }
   }
 
   function onPointerDown(e: React.PointerEvent) {
@@ -99,31 +164,28 @@ export function TerrainMap({ regions, settlements, dim, initialCenter }: Props) 
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
-          {/* Terrain tiles */}
-          {tiles.map(({ tx, tz }) => {
-            const [sx, sy] = toScreen(tx * tileSpan, tz * tileSpan);
-            return (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={`${scale}/${tx}/${tz}`}
-                src={`/api/map/tile?dim=${encodeURIComponent(dim)}&scale=${scale}&tx=${tx}&tz=${tz}`}
-                alt=""
-                draggable={false}
-                className="absolute"
-                style={{
-                  left: sx,
-                  top: sy,
-                  width: TILE,
-                  height: TILE,
-                  imageRendering: scale <= 1 ? "pixelated" : "auto",
-                }}
-                onError={(e) => {
-                  // Unmapped area — hide the broken-image glyph.
-                  (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
-                }}
-              />
-            );
-          })}
+          {/* Base map tiles (live terrain or canonical world-gen) */}
+          {baseTiles.map((t) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={t.key}
+              src={t.src}
+              alt=""
+              draggable={false}
+              className="absolute"
+              style={{
+                left: t.left,
+                top: t.top,
+                width: t.w,
+                height: t.h,
+                imageRendering: t.pixelated ? "pixelated" : "auto",
+              }}
+              onError={(e) => {
+                // Unmapped area — hide the broken-image glyph.
+                (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
+              }}
+            />
+          ))}
 
           {/* Claims + settlements overlay (same projection) */}
           <svg className="absolute inset-0 h-full w-full pointer-events-none">
@@ -226,14 +288,30 @@ export function TerrainMap({ regions, settlements, dim, initialCenter }: Props) 
           />
         ) : (
           <div className="rounded-lg border border-stone-200 dark:border-stone-800 p-4 space-y-3 text-xs">
-            <p className="opacity-70 leading-relaxed">
-              Live terrain, rendered from the actual blocks on the server. Drag
-              to pan, +/− to zoom. Click a claim or settlement for details.
-            </p>
-            <p className="opacity-50 leading-relaxed">
-              Unmapped areas fill in as chunks are visited (or backfilled by
-              staff). Tiles refresh within a minute of the world changing.
-            </p>
+            {baseLayer === "worldgen" ? (
+              <>
+                <p className="opacity-70 leading-relaxed">
+                  The canonical Middle-earth map, as the mod generates it. Drag
+                  to pan, +/− to zoom. Click a claim or settlement for details.
+                </p>
+                <p className="opacity-50 leading-relaxed">
+                  Covers the whole world — north is up, east is right — with
+                  region claims and settlements overlaid by world coordinate.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="opacity-70 leading-relaxed">
+                  Live terrain, rendered from the actual blocks on the server.
+                  Drag to pan, +/− to zoom. Click a claim or settlement for
+                  details.
+                </p>
+                <p className="opacity-50 leading-relaxed">
+                  Unmapped areas fill in as chunks are visited (or backfilled by
+                  staff). Tiles refresh within a minute of the world changing.
+                </p>
+              </>
+            )}
           </div>
         )}
       </aside>

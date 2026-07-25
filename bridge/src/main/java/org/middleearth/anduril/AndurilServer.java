@@ -10,6 +10,7 @@ import org.middleearth.anduril.link.LinkCodeRepository;
 import org.middleearth.anduril.link.LinkCommands;
 import org.middleearth.anduril.scan.ConfigReader;
 import org.middleearth.anduril.scan.MapTileStore;
+import org.middleearth.anduril.scan.WorldMapStore;
 import org.middleearth.anduril.scan.PlotRepository;
 import org.middleearth.anduril.scan.PlotScanner;
 import org.middleearth.anduril.scan.ScanCommands;
@@ -42,6 +43,7 @@ public class AndurilServer implements DedicatedServerModInitializer {
     private ConfigReader configReader;
     private ExecutorService scanIo;
     private MapTileStore mapTiles;
+    private WorldMapStore worldMap;
     /** Resolved lazily by the command handlers; populated in onStarting. */
     private volatile ScanCommands scanCommands;
     /** Resolved lazily by the /anduril link handler; populated in onStarting. */
@@ -110,6 +112,14 @@ public class AndurilServer implements DedicatedServerModInitializer {
         // that loads — normal play or the backfill pump — gets its surface
         // captured into PNG tiles; the tick pump drives backfill + flushes.
         mapTiles = new MapTileStore(server.getRunDirectory().resolve("anduril-map"));
+
+        // Canonical world-gen map (biome + height pyramid from the Middle-earth
+        // jar). Extracted once on a background thread so it never blocks start
+        // or the tick; the HTTP layer serves it read-only once ready.
+        worldMap = new WorldMapStore(server.getRunDirectory().resolve("anduril-worldmap"));
+        Thread wmExtract = new Thread(worldMap::ensureExtracted, "anduril-worldmap-extract");
+        wmExtract.setDaemon(true);
+        wmExtract.start();
         ServerChunkEvents.CHUNK_LOAD.register((world, chunk) -> {
             MapTileStore store = mapTiles;
             if (store == null) return;
@@ -126,7 +136,7 @@ public class AndurilServer implements DedicatedServerModInitializer {
         });
 
         try {
-            httpApi = new HttpApi(server, database, configReader, scanService, plotScanner, plotRepository, linkCodes, mapTiles);
+            httpApi = new HttpApi(server, database, configReader, scanService, plotScanner, plotRepository, linkCodes, mapTiles, worldMap);
             httpApi.start();
         } catch (Exception e) {
             Anduril.LOGGER.error("Failed to start Andúril HTTP API: {}", e.getMessage(), e);
