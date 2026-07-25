@@ -1060,6 +1060,40 @@ public class HttpApi {
             "layers", List.of("biomes", "heights")
         )));
 
+        // Protected: set (or clear) a region's polygon boundary — the admin
+        // region editor's save. Per mod_spec §4 all game.* writes go through
+        // the mod. Body: {"boundary": [[x,z],...]} (>=3 points) or
+        // {"boundary": null} to clear and fall back to the centre+radius circle.
+        app.put("/api/v1/regions/{id}/boundary", ctx -> {
+            String regionId = ctx.pathParam("id");
+            if (!regionId.matches("[A-Za-z0-9_-]{1,32}")) {
+                throw new BadRequestResponse("Invalid region id.");
+            }
+            BoundaryRequest req = ctx.bodyAsClass(BoundaryRequest.class);
+            String json = boundaryToJson(req == null ? null : req.boundary()); // null = clear
+            try (Connection conn = database.getConnection();
+                 PreparedStatement up = conn.prepareStatement(
+                     "UPDATE game.regions SET boundary = CAST(? AS jsonb) WHERE id = ? RETURNING id")) {
+                if (json == null) {
+                    up.setNull(1, java.sql.Types.VARCHAR);
+                } else {
+                    up.setString(1, json);
+                }
+                up.setString(2, regionId);
+                try (ResultSet rs = up.executeQuery()) {
+                    if (!rs.next()) throw new NotFoundResponse("Region not found: " + regionId);
+                }
+                Anduril.LOGGER.info("Region {} boundary set to {} vertices.",
+                    regionId, req == null || req.boundary() == null ? 0 : req.boundary().size());
+                ctx.json(Map.of(
+                    "id", regionId,
+                    "vertices", req == null || req.boundary() == null ? 0 : req.boundary().size()));
+            } catch (SQLException e) {
+                Anduril.LOGGER.error("Region boundary write failed: {}", e.getMessage(), e);
+                throw new RuntimeException("Database error", e);
+            }
+        });
+
         // Protected: queue a map backfill — every chunk of every EXISTING
         // region file of the dimension is loaded through the tick pump
         // (throttled) and captured. Fills the map without waiting for players
@@ -1233,6 +1267,34 @@ public class HttpApi {
         return server.getWorld(RegistryKey.of(RegistryKeys.WORLD, id));
     }
 
+    /**
+     * Validate a region boundary and serialise it to a compact integer JSON
+     * ring like {@code [[x,z],[x,z],...]}. Returns null when {@code pts} is null
+     * (a request to clear the boundary). Throws {@link BadRequestResponse} for a
+     * malformed ring (fewer than 3 points, more than 512, or a vertex that
+     * isn't a pair of finite numbers within the 0..WORLD_SIZE map bounds).
+     */
+    private static String boundaryToJson(java.util.List<java.util.List<Double>> pts) {
+        if (pts == null) return null;
+        if (pts.size() < 3) throw new BadRequestResponse("A boundary needs at least 3 points.");
+        if (pts.size() > 512) throw new BadRequestResponse("Boundary has too many points (max 512).");
+        int max = WorldMapStore.WORLD_SIZE;
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < pts.size(); i++) {
+            java.util.List<Double> p = pts.get(i);
+            if (p == null || p.size() != 2 || p.get(0) == null || p.get(1) == null) {
+                throw new BadRequestResponse("Each vertex must be [x, z].");
+            }
+            double x = p.get(0), z = p.get(1);
+            if (!Double.isFinite(x) || !Double.isFinite(z) || x < 0 || z < 0 || x > max || z > max) {
+                throw new BadRequestResponse("Vertex out of map bounds (0.." + max + ").");
+            }
+            if (i > 0) sb.append(',');
+            sb.append('[').append(Math.round(x)).append(',').append(Math.round(z)).append(']');
+        }
+        return sb.append(']').toString();
+    }
+
     private static int parseIntParam(io.javalin.http.Context ctx, String name) {
         String v = ctx.queryParam(name);
         if (v == null) throw new BadRequestResponse("Missing query param: " + name);
@@ -1330,6 +1392,9 @@ public class HttpApi {
     ) {}
 
     public record GrantRequest(String currency, Long amount, String reason) {}
+
+    /** Body for PUT /regions/{id}/boundary: an [x,z] ring, or null to clear. */
+    public record BoundaryRequest(java.util.List<java.util.List<Double>> boundary) {}
 
     /** Response body — the updated faction state plus the audit row id. */
     public record GrantResponse(

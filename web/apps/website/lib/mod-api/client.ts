@@ -227,14 +227,14 @@ async function modGet<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function modPost<T>(path: string, body: unknown): Promise<T> {
+async function modSend<T>(method: "POST" | "PUT", path: string, body: unknown): Promise<T> {
   const base = process.env.MOD_API_URL;
   const token = process.env.MOD_API_TOKEN;
   if (!base || !token) {
     throw new Error("MOD_API_URL and MOD_API_TOKEN must be set when not using the mock.");
   }
   const res = await fetch(`${base}/api/v1${path}`, {
-    method: "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       "X-Mod-Token": token,
@@ -252,4 +252,34 @@ async function modPost<T>(path: string, body: unknown): Promise<T> {
     throw new ModApiError(res.status, problem);
   }
   return (await res.json()) as T;
+}
+
+async function modPost<T>(path: string, body: unknown): Promise<T> {
+  return modSend<T>("POST", path, body);
+}
+
+async function modPut<T>(path: string, body: unknown): Promise<T> {
+  return modSend<T>("PUT", path, body);
+}
+
+/**
+ * Set (or clear, with boundary=null) a region's polygon boundary — an ordered
+ * ring of [x, z] world coordinates. Writes go through the bridge per mod_spec.
+ */
+export async function saveRegionBoundary(
+  regionId: string,
+  boundary: [number, number][] | null,
+): Promise<{ id: string; vertices: number }> {
+  if (shouldMock()) {
+    throw new ModApiError(503, {
+      title: "Bridge mock doesn't implement saveRegionBoundary",
+      status: 503,
+      detail:
+        "Set MOD_API_URL to the running Andúril bridge and MOD_API_MOCK=0 to use this action.",
+    });
+  }
+  return await modPut<{ id: string; vertices: number }>(
+    `/regions/${encodeURIComponent(regionId)}/boundary`,
+    { boundary },
+  );
 }
